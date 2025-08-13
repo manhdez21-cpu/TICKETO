@@ -114,6 +114,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os, json, hmac, base64, time
 import extra_streamlit_components as stx
+import streamlit.components.v1 as components
 
 
 # ---------------------------------------------------------
@@ -209,8 +210,27 @@ def _issue_session(username: str, role: str):
     st.session_state["auth_role"] = role
 
 def _clear_session():
-    cm = _cookie_mgr(); cm.get_all()
-    cm.delete(SESSION_COOKIE)
+    cm = _cookie_mgr()
+    # Monta el widget y sincroniza el estado interno
+    try:
+        cm.get_all()
+    except Exception:
+        pass
+
+    # 1) Si existe, intenta borrar con clave única para el widget
+    try:
+        if cm.get(SESSION_COOKIE) is not None:
+            cm.delete(SESSION_COOKIE, key="del_"+SESSION_COOKIE)
+    except Exception:
+        # 2) Si falla o no existe, fuerza expiración sobrescribiendo
+        try:
+            cm.set(SESSION_COOKIE, "", 
+                   expires_at=datetime.now() - timedelta(days=1),
+                   key="exp_"+SESSION_COOKIE)
+        except Exception:
+            pass
+
+    # Limpia estado de Streamlit
     st.session_state.pop("auth_user", None)
     st.session_state.pop("auth_role", None)
 
@@ -1049,6 +1069,31 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
         df2 = df2[(df2["fecha"]>=f0) & (df2["fecha"]<=f1)]
     return df2
 
+def _close_sidebar_on_mobile():
+    # Cierra la sidebar en móviles tras cambiar de sección
+    components.html("""
+    <script>
+    (function(){
+      // Solo si el viewport es angosto (móvil / tablet)
+      if (!window.matchMedia("(max-width: 900px)").matches) return;
+
+      const clickClose = () => {
+        // El botón para colapsar la sidebar (varía según versión)
+        const doc = window.parent?.document || document;
+        const btn = doc.querySelector('[data-testid="stSidebarCollapseControl"] button')
+                 || doc.querySelector('[data-testid="collapsedControl"]')
+                 || doc.querySelector('[data-testid="stSidebarCollapseControl"]');
+
+        if (btn) { btn.click(); return true; }
+        return false;
+      };
+      // Intentos escalonados por si el DOM aún está montando
+      setTimeout(clickClose, 0);
+      setTimeout(clickClose, 200);
+      setTimeout(clickClose, 600);
+    })();
+    </script>
+    """, height=0, width=0)
 
 # --- User badge (logo + nombre arriba a la derecha) ---
 def _guess_logo_path(candidates: list[str] | None = None) -> str | None:
@@ -1527,8 +1572,12 @@ with st.sidebar:
 
         st.markdown("---")
         st.markdown("**Mi cuenta**")
-        newp = st.text_input("Nueva contraseña", type="password", key="SELF_pwd")
-        if st.button("Cambiar mi contraseña", key="SELF_btn"):
+
+        with st.form("SELF_pw_form", clear_on_submit=True):
+            newp = st.text_input("Nueva contraseña", type="password")
+            ok = st.form_submit_button("Cambiar mi contraseña")
+
+        if ok:
             if not newp:
                 st.error("Escribe la nueva contraseña.")
             else:
@@ -1611,6 +1660,8 @@ with st.sidebar:
     if "nav_left" not in st.session_state:
         st.session_state["nav_left"] = tabs[0]
 
+    _prev_nav = st.session_state["nav_left"]   # ← NUEVO: guardo valor previo
+
     # ⬇️⬇️ NUEVO: switch de modo compacto en la sidebar
     compact = st.toggle("🧩 Modo compacto", value=st.session_state.get("ui_compact", False), key="ui_compact")
     st.divider()  # opcional, solo para separar visualmente
@@ -1624,6 +1675,10 @@ with st.sidebar:
     )
 
 current = st.session_state["nav_left"]
+
+# Si cambió la pestaña, cierra la sidebar en móvil
+if _prev_nav != current:
+    _close_sidebar_on_mobile()
 
 # ⬇️⬇️ NUEVO: CSS si está activo el modo compacto
 if st.session_state.get("ui_compact", False):
