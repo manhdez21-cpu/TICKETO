@@ -1,0 +1,4 @@
+finanzas.sqlite
+backups/
+service_account.json
+.streamlit/
