@@ -223,26 +223,30 @@ def _issue_session(username: str, role: str):
 
 def _clear_session():
     cm = _cookie_mgr()
-    # Monta el widget y sincroniza el estado interno
     try:
-        cm.get_all()
+        cm.get_all()  # monta el widget en el DOM
     except Exception:
         pass
 
-    # 1) Si existe, intenta borrar con clave única para el widget
+    # 1) intenta borrar si existe (clave única para forzar render del componente)
     try:
         if cm.get(SESSION_COOKIE) is not None:
-            cm.delete(SESSION_COOKIE, key="del_"+SESSION_COOKIE)
+            cm.delete(SESSION_COOKIE, key=f"del_{int(time.time())}")
     except Exception:
-        # 2) Si falla o no existe, fuerza expiración sobrescribiendo
-        try:
-            cm.set(SESSION_COOKIE, "", 
-                   expires_at=datetime.now() - timedelta(days=1),
-                   key="exp_"+SESSION_COOKIE)
-        except Exception:
-            pass
+        pass
 
-    # Limpia estado de Streamlit
+    # 2) fuerza expiración por si el delete no llegó a tiempo
+    try:
+        cm.set(
+            SESSION_COOKIE,
+            "",
+            expires_at=datetime.utcnow() - timedelta(days=1),
+            key=f"exp_{int(time.time())}",
+        )
+    except Exception:
+        pass
+
+    # limpia el estado de la app
     st.session_state.pop("auth_user", None)
     st.session_state.pop("auth_role", None)
 
@@ -436,12 +440,19 @@ def db_delete_user(username: str):
     audit("user.delete", table_name="users", before={"username": username.strip(), "role": old["role"] if old else None})
 
 def ensure_admin_seed():
-    # Si no hay usuarios, crea admin/admin123
-    with get_conn() as conn:
-        n = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    if n == 0:
-        db_create_user("admin", "admin123", "admin")
-ensure_admin_seed()
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (username, pw_hash, role)
+                VALUES (?, ?, ?)
+                """,
+                ("admin", hash_password("admin123"), "admin"),
+            )
+            # Garantiza rol/activo sin tocar password si ya existía
+            conn.execute("UPDATE users SET role='admin', is_active=1 WHERE username='admin'")
+    except Exception as e:
+        print("ensure_admin_seed error:", e)   
 
 # ========== Login form ==========
 def login_form() -> None:
@@ -1082,27 +1093,34 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
     return df2
 
 def _close_sidebar_on_mobile():
-    # Cierra la sidebar en móviles tras cambiar de sección
     components.html("""
     <script>
-    (function(){
-      // Solo si el viewport es angosto (móvil / tablet)
+    (function () {
+      // Solo en pantallas angostas
       if (!window.matchMedia("(max-width: 900px)").matches) return;
 
-      const clickClose = () => {
-        // El botón para colapsar la sidebar (varía según versión)
-        const doc = window.parent?.document || document;
-        const btn = doc.querySelector('[data-testid="stSidebarCollapseControl"] button')
-                 || doc.querySelector('[data-testid="collapsedControl"]')
-                 || doc.querySelector('[data-testid="stSidebarCollapseControl"]');
+      const doc = window.parent?.document || document;
 
-        if (btn) { btn.click(); return true; }
+      function clickClose(){
+        // distintos posibles botones/controles según versión de Streamlit
+        const btn =
+          doc.querySelector('[data-testid="stSidebarCollapseControl"] button') ||
+          doc.querySelector('[data-testid="collapsedControl"]') ||
+          doc.querySelector('[data-testid="stSidebarCollapseControl"]');
+
+        if (btn) {
+          btn.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+          return true;
+        }
+        // Fallback: click al overlay si existe
+        const overlay = doc.querySelector('[data-testid="stSidebarOverlay"]');
+        if (overlay){ overlay.click(); return true; }
+
         return false;
-      };
-      // Intentos escalonados por si el DOM aún está montando
-      setTimeout(clickClose, 0);
-      setTimeout(clickClose, 200);
-      setTimeout(clickClose, 600);
+      }
+
+      // Intenta varias veces mientras el DOM termina de montar
+      [0, 150, 400, 800].forEach(t => setTimeout(clickClose, t));
     })();
     </script>
     """, height=0, width=0)
@@ -1545,9 +1563,16 @@ with st.sidebar:
     with pop:
         st.caption(f"Sesión: **{user}** · rol **{role}**")
 
-        if st.button("🚪 Cerrar sesión"):
+        if st.button("🚪 Cerrar sesión", use_container_width=True, key="btn_logout"):
             audit("logout", extra={"user": user})
-            _clear_session(); st.rerun()
+            _clear_session()
+            st.success("Sesión cerrada. Volviendo al login…")
+            # da ~500ms para que el navegador actualice cookies y luego recarga
+            components.html(
+                "<script>setTimeout(()=>window.parent.location.reload(), 600)</script>",
+                height=0, width=0
+            )
+            st.stop()
 
         if st.button("🔄 Reiniciar estado y caché"):
             st.session_state.clear(); st.rerun()
