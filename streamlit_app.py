@@ -8,6 +8,12 @@ from __future__ import annotations
 import streamlit as st
 st.set_page_config(page_title="Control de Gastos y Ventas", layout="wide")  # antes de cualquier widget
 
+with st.sidebar:
+    import pathlib
+    p = pathlib.Path(__file__).resolve()
+    st.caption(f"🧩 Build: {APP_BUILD}")
+    st.caption(f"🔑 App sig: {_app_sig()}")
+
 st.markdown('<meta name="google" content="notranslate">', unsafe_allow_html=True)
 
 import hashlib, pathlib  # <- sin from pathlib import hashlib
