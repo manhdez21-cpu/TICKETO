@@ -8,16 +8,21 @@ from __future__ import annotations
 import streamlit as st
 st.set_page_config(page_title="Control de Gastos y Ventas", layout="wide")  # antes de cualquier widget
 
+import hashlib, pathlib  # <- sin from pathlib import hashlib
+APP_BUILD = "TickeTo · 2025-08-13 nav-left-fix"
+
+def _app_sig() -> str:
+    try:
+        return hashlib.sha1(pathlib.Path(__file__).read_bytes()).hexdigest()[:10]
+    except Exception:
+        return "nohash"
+
 with st.sidebar:
     import pathlib
     p = pathlib.Path(__file__).resolve()
     st.caption(f"🧩 Build: {APP_BUILD}")
-    st.caption(f"🔑 App sig: {_app_sig()}")
 
 st.markdown('<meta name="google" content="notranslate">', unsafe_allow_html=True)
-
-import hashlib, pathlib  # <- sin from pathlib import hashlib
-APP_BUILD = "TickeTo · 2025-08-13 nav-left-fix"
 
 def _app_sig() -> str:
     try:
@@ -121,6 +126,7 @@ from google.oauth2.service_account import Credentials
 import os, json, hmac, base64, time
 import extra_streamlit_components as stx
 import streamlit.components.v1 as components
+
 
 
 # ---------------------------------------------------------
