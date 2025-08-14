@@ -1160,6 +1160,22 @@ def notify_ok(msg: str):
     except Exception:
         pass
 
+def flash_next_run(msg: str, icon: str = "✅"):
+    """Guarda un mensaje para mostrarlo tras el próximo rerun."""
+    st.session_state["_flash_msg"] = (msg, icon)
+
+def show_flash_if_any():
+    """Muestra y limpia el mensaje pendiente (si existe)."""
+    data = st.session_state.pop("_flash_msg", None)
+    if not data:
+        return
+    msg, icon = (data if isinstance(data, tuple) else (str(data), "✅"))
+    try:
+        st.toast(msg, icon=icon)
+    except Exception:
+        pass
+    st.success(msg)
+
 def currency_input(label: str, key: str, value: float = 0.0, help: str | None = None, in_form: bool = False) -> float:
     # En móvil usamos number_input para teclado numérico nativo
     if st.session_state.get("is_mobile", False):
@@ -1620,11 +1636,12 @@ def restore_from_gsheets_if_empty():
         st.warning(f"No se pudo restaurar desde Google Sheets: {e}")
 
 # ========= Refresco estandarizado =========
-def finish_and_refresh(msg: str = "Listo ✅", tables_to_sync: list[str] | None = None):
+def finish_and_refresh(msg: str | None = "Listo ✅", tables_to_sync: list[str] | None = None):
     try:
-        notify_ok(msg)
         if tables_to_sync:
             sync_tables_to_gsheet(tables_to_sync)
+        if msg:
+            flash_next_run(msg)   # <- en vez de notify_ok aquí
     finally:
         st.cache_data.clear()
         st.rerun()
@@ -2121,6 +2138,7 @@ st.markdown("""
 
 # Título siempre actualizado
 show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False)
+show_flash_if_any()
 
 def quick_nav_mobile():
     if not st.session_state.get("is_mobile", False):
@@ -2225,6 +2243,8 @@ with st.container():
 
 def show(section: str) -> bool:
     return current == section
+
+
 
 # ---------------------------------------------------------
 # Diario consolidado
