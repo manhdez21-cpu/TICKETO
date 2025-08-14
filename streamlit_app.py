@@ -2222,20 +2222,20 @@ st.markdown("""
 
 st.markdown("""
 <style>
-/* ========= BOTÓN HAMBURGUESA LLAMATIVO (centrado de verdad) ========= */
+/* ========= BOTÓN HAMBURGUESA — NARANJA ========= */
 [data-testid="stSidebarCollapseControl"] button,
 [data-testid="collapsedControl"]{
   width: 46px !important;
   height: 46px !important;
   border-radius: 999px !important;
-  background: linear-gradient(135deg,#6366f1,#22d3ee) !important;
+  background: linear-gradient(135deg,#f97316,#fb923c) !important; /* 🟧 naranja → naranja claro */
   border: 0 !important;
   padding: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  position: relative !important;              /* <— clave para centrar el ::before */
-  box-shadow: 0 6px 16px rgba(99,102,241,.35), 0 2px 4px rgba(0,0,0,.16) !important;
+  position: relative !important;
+  box-shadow: 0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16) !important; /* sombras naranjas */
   transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
   z-index: 2000 !important;
   cursor: pointer;
@@ -2245,18 +2245,16 @@ st.markdown("""
 [data-testid="stSidebarCollapseControl"] button svg,
 [data-testid="collapsedControl"] svg{ display:none !important; }
 
-/* 3 barras centradas */
+/* 3 barras blancas centradas */
 [data-testid="stSidebarCollapseControl"] button::before,
 [data-testid="collapsedControl"]::before{
   content:"";
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 22px; height: 2px;                   /* barra central */
+  width: 22px; height: 2px;
   background:#fff; border-radius: 2px;
-  box-shadow:
-    0 -6px 0 0 #fff,                           /* barra superior */
-    0  6px 0 0 #fff;                           /* barra inferior */
+  box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
 }
 
 [data-testid="stSidebarCollapseControl"] button:hover,
@@ -2264,11 +2262,11 @@ st.markdown("""
   transform: translateY(-1px) scale(1.04);
 }
 
-/* Efecto pulse cuando está colapsado */
+/* Efecto pulse cuando está colapsado — tono naranja */
 @keyframes tt-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(99,102,241,.55); }
-  70%  { box-shadow: 0 0 0 14px rgba(99,102,241,0); }
-  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+  0%   { box-shadow: 0 0 0 0 rgba(249,115,22,.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(249,115,22,0); }
+  100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
 }
 [data-testid="collapsedControl"]{
   animation: tt-pulse 2.2s ease-out infinite;
