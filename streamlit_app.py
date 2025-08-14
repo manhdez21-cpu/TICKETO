@@ -504,7 +504,23 @@ ensure_admin_seed()
 
 # ========== Login form ==========
 def login_form() -> None:
+    # Tarjeta bonita para el login (también en dark mode)
+    st.markdown("""
+    <style>
+    .login-card{
+      max-width: 520px; margin: 6vh auto; padding: 20px 22px;
+      border:1px solid rgba(120,120,135,.18); border-radius:14px; background:#fff;
+      box-shadow:0 6px 18px rgba(0,0,0,.06);
+    }
+    @media (prefers-color-scheme: dark){
+      .login-card{ background:#0b0f19; border-color:#1f2937; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
     st.title("Iniciar sesión")
+
     with st.form("login_form"):
         col1, col2 = st.columns(2)
         username = col1.text_input("Usuario")
@@ -526,7 +542,8 @@ def login_form() -> None:
                 "src": "sqlite",
                 "user_try": uname
             })
-            st.success("Bienvenido 👋"); st.rerun()
+            st.success("Bienvenido 👋")
+            st.rerun()
         else:
             # Si el usuario existe pero está inactivo, no intentes DEMO
             if urec and not urec["active"]:
@@ -546,13 +563,14 @@ def login_form() -> None:
                         "src": "demo",
                         "user_try": uname
                     })
-                    st.success("Bienvenido 👋"); st.rerun()
-                    return  # éxito demo
+                    st.success("Bienvenido 👋")
+                    st.rerun()
+                    return
 
-            # Si llegas aquí, falló
             audit("login.failed", extra={"user_try": uname})
             st.error("Usuario o contraseña inválidos")
 
+    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 def require_user() -> tuple[str, str]:
@@ -1253,28 +1271,28 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
     return df2
 
 def _close_sidebar_on_mobile():
+    import time
     components.html("""
     <script>
-    (function () {
-      if (!window.matchMedia("(max-width: 900px)").matches) return;
-      const doc = window.parent?.document || document;
-
-      function clickClose(){
-        const btn =
-          doc.querySelector('[data-testid="stSidebarCollapseControl"] button') ||
-          doc.querySelector('[data-testid="collapsedControl"]') ||
-          doc.querySelector('[data-testid="stSidebarCollapseControl"]');
-        if (btn) { btn.dispatchEvent(new MouseEvent('click', {bubbles:true})); return true; }
-        const overlay = doc.querySelector('[data-testid="stSidebarOverlay"]');
-        if (overlay){ overlay.click(); return true; }
-        return false;
-      }
-      [0, 150, 400, 800].forEach(t => setTimeout(clickClose, t));
-      // Scroll a tope para que el usuario vea el título de la nueva sección
-      setTimeout(() => window.parent?.scrollTo({top:0, behavior:'smooth'}), 50);
+    (function(){
+      try{
+        if (!window.matchMedia('(max-width: 900px)').matches) return;
+        const doc = window.parent?.document || document;
+        function closeIt(){
+          // 1) Si hay overlay (sidebar abierta en móvil), clic ahí
+          const overlay = doc.querySelector('[data-testid="stSidebarOverlay"]');
+          if (overlay){ overlay.click(); return true; }
+          // 2) Si no, intenta el botón de colapso/expandir
+          const btn = doc.querySelector('[data-testid="stSidebarCollapseControl"] button')
+                    || doc.querySelector('[data-testid="collapsedControl"]');
+          if (btn){ btn.click(); return true; }
+          return false;
+        }
+        [0,80,160,320,640].forEach(t => setTimeout(closeIt, t));
+      }catch(e){}
     })();
     </script>
-    """, height=0, width=0)
+    """, height=0, width=0, key=f"autoClose_{int(time.time()*1000)}")
 
 # --- User badge (logo + nombre arriba a la derecha) ---
 def _guess_logo_path(candidates: list[str] | None = None) -> str | None:
@@ -1777,9 +1795,10 @@ def import_excel_all(xls_file, replace: bool = False) -> dict:
 # =========================================================
 # Sidebar (login primero)
 # =========================================================
+user, role = require_user()
+
 with st.sidebar:
-    user, role = require_user()
-    # Ejecuta el backup automático sólo cuando ya hay sesión iniciada
+        # Ejecuta el backup automático sólo cuando ya hay sesión iniciada
     try:
         auto_backup_if_due()
     except Exception as e:
