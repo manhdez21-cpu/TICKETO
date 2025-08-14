@@ -15,6 +15,61 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+st.markdown("""
+<style>
+/* Desktop: deja el botón nativo operable y por encima */
+@media (min-width: 901px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="collapsedControl"]{
+    z-index: 2000 !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* Móvil: OCULTA por completo el botón nativo -> evita el “botón doble” */
+@media (max-width: 900px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="stSidebarCollapseControl"] *,
+  [data-testid="collapsedControl"]{
+    display:none !important;
+    visibility:hidden !important;
+    pointer-events:none !important;
+  }
+
+  /* Sidebar angosta + animación */
+  section[data-testid='stSidebar']{
+    width: 232px !important;
+    min-width: 232px !important;
+    transform: translateX(-110%);
+    visibility: hidden;
+    transition: transform .25s ease, visibility .25s ease !important;
+    z-index: 2000 !important;
+  }
+  section[data-testid='stSidebar'][data-tt-open='1']{
+    transform: translateX(0) !important;
+    visibility: visible !important;
+  }
+
+  /* Botón hamburguesa naranja flotante */
+  #tt-burger{
+    position: fixed; top: 14px; left: 14px;
+    width: 52px; height: 52px; border:0; border-radius:999px;
+    background: linear-gradient(135deg,#f97316,#f59e0b);
+    box-shadow: 0 10px 24px rgba(0,0,0,.18);
+    cursor: pointer; z-index: 2100;
+  }
+  #tt-burger i{
+    display:block; width:22px; height:3px; background:#fff;
+    border-radius:2px; margin:6px auto 0; box-shadow:0 1px 0 rgba(0,0,0,.08);
+  }
+  #tt-burger i:first-child{ margin-top:14px; }
+
+  /* Overlay cuando la sidebar está abierta */
+  #tt-ov{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999; }
+}
+</style>
+""", unsafe_allow_html=True)
+
 def _close_sidebar_on_mobile():
     components.html("""
     <script>
@@ -103,8 +158,9 @@ header[data-testid="stHeader"] > div { background: transparent !important; box-s
 
 /* Nuestro header pegajoso queda por debajo del control de sidebar */
 .tt-sticky{ z-index: 1000 !important; }
-
-/* El control de colapso/expandir sidebar siempre por encima y clickeable */
+</style>
+""", unsafe_allow_html=True)      
+            
 st.markdown("""
 <style>
 @media (min-width: 901px){
@@ -114,8 +170,6 @@ st.markdown("""
     pointer-events: auto !important;
   }
 }
-</style>
-""", unsafe_allow_html=True)
 </style>
 """, unsafe_allow_html=True)
 
@@ -2103,59 +2157,58 @@ components.html("""
     if(!matchMedia('(max-width: 900px)').matches) return;
     const doc = (window.parent || window).document;
 
-    const qs = (s, r) => (r||doc).querySelector(s);
+    function qs(s, r){ return (r||doc).querySelector(s); }
 
-    function addBurger(){
+    function ensureBurger(){
       if(qs('#tt-burger')) return;
-      const b = doc.createElement('button');
-      b.id = 'tt-burger';
-      // 3 rayitas
-      for(let i=0;i<3;i++){ const bar = doc.createElement('span'); b.appendChild(bar); }
+      const b = doc.createElement('button'); b.id = 'tt-burger';
+      b.appendChild(doc.createElement('i'));
+      b.appendChild(doc.createElement('i'));
+      b.appendChild(doc.createElement('i'));
       b.addEventListener('click', toggle);
       doc.body.appendChild(b);
     }
 
-    function addOverlay(){
+    function ensureOverlay(){
       if(qs('#tt-ov')) return;
-      const ov = doc.createElement('div');
-      ov.id='tt-ov';
-      ov.addEventListener('click', close);
+      const ov = doc.createElement('div'); ov.id='tt-ov';
+      ov.addEventListener('click', closeSB);
       doc.body.appendChild(ov);
     }
     function removeOverlay(){ const ov = qs('#tt-ov'); if(ov) ov.remove(); }
 
-    function open(){
+    function openSB(){
       const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
-      sb.setAttribute('data-tt-open','1'); addOverlay();
+      sb.setAttribute('data-tt-open','1'); ensureOverlay();
     }
-    function close(){
+    function closeSB(){
       const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
       sb.removeAttribute('data-tt-open'); removeOverlay();
     }
-    function toggle(){
-      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
-      sb.getAttribute('data-tt-open') === '1' ? close() : open();
+    function toggle(){ const sb = qs("section[data-testid='stSidebar']");
+      if(!sb) return; (sb.getAttribute('data-tt-open')==='1') ? closeSB() : openSB();
     }
 
-    // Cerrar automáticamente cuando tocan una opción del menú
+    // Cierra al elegir una opción del radio (menú)
     function autoCloseOnRadio(){
       const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
       const rg = sb.querySelector("div[role='radiogroup']"); if(!rg) return;
-      rg.addEventListener('click', (e) => {
-        if(e.target.closest('label')) setTimeout(close, 60);
+      rg.addEventListener('click', function(e){
+        if(e.target.closest('label')) setTimeout(closeSB, 60);
       }, {capture:true});
     }
 
-    function init(){
-      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return false;
-      sb.removeAttribute('data-tt-open'); // arranca cerrada
-      addBurger();
-      autoCloseOnRadio();
-      return true;
-    }
-
+    // Inicializa tras cada render
     let tries = 0;
-    const t = setInterval(() => { if(init() || ++tries > 40) clearInterval(t); }, 80);
+    const t = setInterval(function(){
+      const sb = qs("section[data-testid='stSidebar']");
+      if(sb){
+        sb.removeAttribute('data-tt-open'); // arranca oculta
+        ensureBurger();
+        autoCloseOnRadio();
+        clearInterval(t);
+      }else if(++tries > 40){ clearInterval(t); }
+    }, 80);
   }catch(e){}
 })();
 </script>
