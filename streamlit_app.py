@@ -2044,9 +2044,128 @@ with st.sidebar:
 
 current = st.session_state["nav_left"]
 
-# Si cambió la pestaña, cierra la sidebar en móvil
-if _prev_nav != current:
-    _close_sidebar_on_mobile()
+components.html("""
+<style>
+@media (max-width: 900px){
+  /* Sidebar más angosta en móvil */
+  section[data-testid='stSidebar']{
+    width: 68vw !important;
+    min-width: 260px !important;
+    max-width: 420px !important;
+    transition: transform .25s ease, visibility .25s ease !important;
+    transform: translateX(-110%);   /* oculta por defecto */
+    visibility: hidden;
+    z-index: 2000 !important;
+  }
+
+  /* Oculta el control nativo de Streamlit en móvil */
+  [data-testid='stSidebarCollapseControl'],
+  [data-testid='collapsedControl']{
+    display:none !important;
+  }
+
+  /* Botón flotante (hamburguesa) naranja */
+  #tt-burger{
+    position: fixed;
+    top: 14px; left: 14px;
+    width: 52px; height: 52px;
+    border: 0; border-radius: 999px;
+    background: linear-gradient(135deg,#f97316,#f59e0b);
+    box-shadow: 0 10px 24px rgba(0,0,0,.18);
+    cursor: pointer; z-index: 2100;
+  }
+  #tt-burger:before, #tt-burger:after, #tt-burger i{
+    content:""; display:block; width:22px; height:3px;
+    background:#fff; border-radius:2px; margin:3px auto;
+    box-shadow: 0 1px 0 rgba(0,0,0,.08);
+  }
+
+  /* Overlay propio cuando la sidebar está abierta */
+  #tt-ov{
+    position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999;
+  }
+
+  /* Estado abierto (lo pone el script) */
+  section[data-testid='stSidebar'][data-tt-open='1']{
+    transform: translateX(0) !important;
+    visibility: visible !important;
+  }
+}
+</style>
+<script>
+(function(){
+  try{
+    if(!matchMedia('(max-width: 900px)').matches) return;
+    const doc = (window.parent || window).document;
+
+    function qs(s, r){ return (r||doc).querySelector(s); }
+
+    function ensureBurger(){
+      if(qs('#tt-burger')) return;
+      const b = doc.createElement('button');
+      b.id = 'tt-burger';
+      const i = doc.createElement('i'); b.appendChild(i); // 3 rayitas (via CSS)
+      b.appendChild(doc.createElement('i')); b.appendChild(doc.createElement('i'));
+      b.addEventListener('click', toggle);
+      doc.body.appendChild(b);
+    }
+
+    function ensureOverlay(){
+      if(qs('#tt-ov')) return;
+      const ov = doc.createElement('div'); ov.id='tt-ov';
+      ov.addEventListener('click', close);
+      doc.body.appendChild(ov);
+    }
+
+    function removeOverlay(){
+      const ov = qs('#tt-ov'); if(ov) ov.remove();
+    }
+
+    function open(){
+      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
+      sb.setAttribute('data-tt-open','1'); ensureOverlay();
+    }
+
+    function close(){
+      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
+      sb.removeAttribute('data-tt-open'); removeOverlay();
+    }
+
+    function toggle(){
+      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
+      sb.getAttribute('data-tt-open') === '1' ? close() : open();
+    }
+
+    function autoCloseOnRadio(){
+      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
+      const rg = sb.querySelector(\"div[role='radiogroup']\"); if(!rg) return;
+      rg.addEventListener('click', function(e){
+        const label = e.target.closest('label'); if(!label) return;
+        // Cuando el usuario toca una opción, cerramos tras un micro-delay
+        setTimeout(close, 60);
+      }, {capture:true});
+    }
+
+    function init(){
+      const sb = qs(\"section[data-testid='stSidebar']\");
+      if(!sb) return false;
+      // arranca oculta en móvil
+      sb.removeAttribute('data-tt-open');
+      ensureBurger();
+      autoCloseOnRadio();
+      return true;
+    }
+
+    // Espera a que aparezca la sidebar (tras cada rerun)
+    let tries = 0;
+    const t = setInterval(function(){
+      if(init() || ++tries > 40) clearInterval(t);
+    }, 80);
+
+  }catch(e){}
+})();
+</script>
+""", height=0, width=0)
 
 # ⬇️⬇️ NUEVO: CSS si está activo el modo compacto
 if st.session_state.get("ui_compact", False):
