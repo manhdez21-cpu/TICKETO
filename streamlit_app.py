@@ -143,11 +143,29 @@ def _db_sig() -> tuple[int, int]:
 # ========== Sesiones persistentes (cookie) + login/roles ==========
 
 
-APP_SECRET = os.environ.get("APP_SECRET", "cambia_esta_clave_larga_y_unica")
-if APP_SECRET == "cambia_esta_clave_larga_y_unica" and os.getenv("ALLOW_DEFAULT_SECRET", "0") != "1":
+# --- Config desde ENV o Secrets (ENV tiene prioridad) ---
+def cfg(name: str, default=None):
+    v = os.environ.get(name, None)
+    if v is None:
+        try:
+            v = st.secrets.get(name)  # type: ignore[attr-defined]
+        except Exception:
+            v = None
+    return default if v is None else v
+
+APP_SECRET = cfg("APP_SECRET", "")
+ALLOW_DEFAULT_SECRET = str(cfg("ALLOW_DEFAULT_SECRET", "0")).strip() == "1"
+if not APP_SECRET:
+    APP_SECRET = "cambia_esta_clave_larga_y_unica"
+
+if APP_SECRET == "cambia_esta_clave_larga_y_unica" and not ALLOW_DEFAULT_SECRET:
+    st.error("APP_SECRET no configurado. Define APP_SECRET en Secrets o variables de entorno.")
     st.stop()
-    raise RuntimeError("APP_SECRET no configurado. Define APP_SECRET en variables de entorno.")
+
 SESSION_COOKIE = "finz_sess"
+
+COOKIE_SECURE_FLAG = str(cfg("COOKIE_SECURE", "1")).strip() == "1"
+DEV_DEMO = str(cfg("DEV_DEMO_USERS", "0")).strip() == "1"
 
 # CookieManager como widget (evita CachedWidgetWarning)
 _cookie_widget = stx.CookieManager()
@@ -239,7 +257,7 @@ def _issue_session(username: str, role: str):
         expires_at=expires_dt,
         key="set_"+SESSION_COOKIE,
         path="/",
-        secure=bool(os.getenv("COOKIE_SECURE", "1") == "1"),  # en local http puro puedes poner 0
+        secure=COOKIE_SECURE_FLAG,  # en local http puro puedes poner 0
         same_site="Lax"
     )
     st.session_state["auth_user"] = username
