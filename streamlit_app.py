@@ -7,7 +7,49 @@
 
 from __future__ import annotations
 import streamlit as st
-st.set_page_config(page_title="Control de Gastos y Ventas", layout="wide")  # antes de cualquier widget
+st.set_page_config(
+    page_title="Control de Gastos y Ventas",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+components.html("""
+<script>
+(function(){
+  try{
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    var url = new URL(window.location.href);
+    var changed = false;
+    if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
+    if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
+    if (changed){
+      history.replaceState(null, "", url.toString());
+      setTimeout(function(){ location.reload(); }, 0);
+    }
+  }catch(e){}
+})();
+</script>
+""", height=0, width=0)
+
+components.html("""
+<script>
+(function(){
+  try{
+    // Solo pantallas angostas (móvil / tablet chica)
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+
+    // Si ya tiene compact=1, no hacemos nada
+    var url = new URL(window.location.href);
+    if (url.searchParams.get("compact")==="1") return;
+
+    // Añade compact=1 y recarga suave (una sola vez)
+    url.searchParams.set("compact","1");
+    history.replaceState(null, "", url.toString());
+    setTimeout(function(){ location.reload(); }, 0);
+  }catch(e){}
+})();
+</script>
+""", height=0, width=0)
 
 import hashlib
 from pathlib import Path
@@ -1270,47 +1312,40 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
         df2 = df2[(df2["fecha"]>=f0) & (df2["fecha"]<=f1)]
     return df2
 
-def _close_sidebar_on_mobile():
-    components.html("""
-    <script>
-    (function () {
-      try{
-        if (!window.matchMedia("(max-width: 900px)").matches) return;
-        const doc = window.parent?.document || document;
+components.html("""
+<script>
+(function () {
+  try{
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    const topWin = window.parent || window;
+    const doc = topWin.document;
 
-        function closeDrawer(){
-          // 1) Clic al overlay (el método más confiable en móvil)
-          const ov = doc.querySelector('[data-testid="stSidebarOverlay"]');
-          if (ov && ov.offsetParent !== null){ ov.click(); return true; }
+    function closeDrawer(){
+      const ov = doc.querySelector('[data-testid="stSidebarOverlay"]');
+      if (ov && ov.offsetParent !== null){ ov.click(); return true; }
+      const btn = doc.querySelector('[data-testid="stSidebarCollapseControl"] button, [data-testid="collapsedControl"]');
+      if (btn){ btn.click(); return true; }
+      const sb = doc.querySelector('section[data-testid="stSidebar"]');
+      if (sb){
+        sb.style.transform = 'translateX(-110%)';
+        sb.style.visibility = 'hidden';
+        sb.setAttribute('data-tt-closed','1');
+        return true;
+      }
+      return false;
+    }
 
-          // 2) Clic al botón de colapso
-          const btn =
-            doc.querySelector('[data-testid="stSidebarCollapseControl"] button') ||
-            doc.querySelector('[data-testid="collapsedControl"]') ||
-            doc.querySelector('[data-testid="stSidebarCollapseControl"]');
-          if (btn){ btn.click(); return true; }
-
-          // 3) Fallback: fuerza estilo oculto
-          const sb = doc.querySelector('section[data-testid="stSidebar"]');
-          if (sb){
-            sb.style.transform = 'translateX(-110%)';
-            sb.style.visibility = 'hidden';
-            return true;
-          }
-          return false;
-        }
-
-        let tries = 0;
-        const t = setInterval(function(){
-          if (closeDrawer() || tries++ > 20) clearInterval(t);
-        }, 100);
-        setTimeout(closeDrawer, 50);
-        setTimeout(closeDrawer, 250);
-        setTimeout(closeDrawer, 600);
-      }catch(e){}
-    })();
-    </script>
-    """, height=0, width=0)
+    let tries = 0;
+    const t = setInterval(function(){
+      if (closeDrawer() || tries++ > 30) clearInterval(t);
+    }, 100);
+    topWin.setTimeout(closeDrawer, 50);
+    topWin.setTimeout(closeDrawer, 250);
+    topWin.setTimeout(closeDrawer, 600);
+  }catch(e){}
+})();
+</script>
+""", height=0, width=0)
 
 # --- User badge (logo + nombre arriba a la derecha) ---
 def _guess_logo_path(candidates: list[str] | None = None) -> str | None:
@@ -2198,44 +2233,6 @@ def quick_nav_mobile():
 
 # Llamado (una sola vez tras el header)
 quick_nav_mobile()
-
-components.html("""
-<script>
-(function(){
-  try{
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
-    var url = new URL(window.location.href);
-    var changed = false;
-    if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
-    if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
-    if (changed){
-      history.replaceState(null, "", url.toString());
-      setTimeout(function(){ location.reload(); }, 0);
-    }
-  }catch(e){}
-})();
-</script>
-""", height=0, width=0)
-
-components.html("""
-<script>
-(function(){
-  try{
-    // Solo pantallas angostas (móvil / tablet chica)
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
-
-    // Si ya tiene compact=1, no hacemos nada
-    var url = new URL(window.location.href);
-    if (url.searchParams.get("compact")==="1") return;
-
-    // Añade compact=1 y recarga suave (una sola vez)
-    url.searchParams.set("compact","1");
-    history.replaceState(null, "", url.toString());
-    setTimeout(function(){ location.reload(); }, 0);
-  }catch(e){}
-})();
-</script>
-""", height=0, width=0)
 
 with st.container():
     a1, a2, a3 = st.columns([1,1,6])
