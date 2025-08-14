@@ -1271,28 +1271,46 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
     return df2
 
 def _close_sidebar_on_mobile():
-    import time
     components.html("""
     <script>
-    (function(){
+    (function () {
       try{
-        if (!window.matchMedia('(max-width: 900px)').matches) return;
+        if (!window.matchMedia("(max-width: 900px)").matches) return;
         const doc = window.parent?.document || document;
-        function closeIt(){
-          // 1) Si hay overlay (sidebar abierta en móvil), clic ahí
-          const overlay = doc.querySelector('[data-testid="stSidebarOverlay"]');
-          if (overlay){ overlay.click(); return true; }
-          // 2) Si no, intenta el botón de colapso/expandir
-          const btn = doc.querySelector('[data-testid="stSidebarCollapseControl"] button')
-                    || doc.querySelector('[data-testid="collapsedControl"]');
+
+        function closeDrawer(){
+          // 1) Clic al overlay (el método más confiable en móvil)
+          const ov = doc.querySelector('[data-testid="stSidebarOverlay"]');
+          if (ov && ov.offsetParent !== null){ ov.click(); return true; }
+
+          // 2) Clic al botón de colapso
+          const btn =
+            doc.querySelector('[data-testid="stSidebarCollapseControl"] button') ||
+            doc.querySelector('[data-testid="collapsedControl"]') ||
+            doc.querySelector('[data-testid="stSidebarCollapseControl"]');
           if (btn){ btn.click(); return true; }
+
+          // 3) Fallback: fuerza estilo oculto
+          const sb = doc.querySelector('section[data-testid="stSidebar"]');
+          if (sb){
+            sb.style.transform = 'translateX(-110%)';
+            sb.style.visibility = 'hidden';
+            return true;
+          }
           return false;
         }
-        [0,80,160,320,640].forEach(t => setTimeout(closeIt, t));
+
+        let tries = 0;
+        const t = setInterval(function(){
+          if (closeDrawer() || tries++ > 20) clearInterval(t);
+        }, 100);
+        setTimeout(closeDrawer, 50);
+        setTimeout(closeDrawer, 250);
+        setTimeout(closeDrawer, 600);
       }catch(e){}
     })();
     </script>
-    """, height=0, width=0, key=f"autoClose_{int(time.time()*1000)}")
+    """, height=0, width=0)
 
 # --- User badge (logo + nombre arriba a la derecha) ---
 def _guess_logo_path(candidates: list[str] | None = None) -> str | None:
@@ -1820,12 +1838,15 @@ with st.sidebar:
 
     # --- Botón de menú compacto (debajo del logo)
     # --- Menú "Mi Cuenta" (popover con fallback a expander) ---
-    try:
-        pop = st.popover("Mi Cuenta", use_container_width=True)
-    except Exception:
-        pop = st.expander("Mi Cuenta", expanded=False)
+    if st.session_state.get("is_mobile", False):
+        mi_cuenta = st.expander("Mi cuenta", expanded=False)
+    else:
+        try:
+            mi_cuenta = st.popover("Mi Cuenta", use_container_width=True)
+        except Exception:
+            mi_cuenta = st.expander("Mi cuenta", expanded=False)
 
-    with pop:
+    with mi_cuenta:
         st.caption(f"Sesión: **{user}** · rol **{role}**")
 
         if st.button("🚪 Cerrar sesión", use_container_width=True, key="btn_logout"):
