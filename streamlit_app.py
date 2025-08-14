@@ -148,7 +148,8 @@ st.markdown("""
 /* Mostrar el header nativo (antes estaba display:none) */
 header[data-testid="stHeader"]{
   display:flex !important;
-  height: 36px; min-height: 36px;
+  height: 32px; min-height: 32px;
+  padding: 0 !important;
   background: transparent !important;
   border-bottom: none !important;
 }
@@ -170,6 +171,25 @@ st.markdown("""
     pointer-events: auto !important;
   }
 }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* Recorta el espacio en la parte alta del contenido */
+[data-testid="stAppViewContainer"] > .main .block-container{
+  padding-top: 12px !important;   /* default ~4–6rem */
+}
+
+/* En móvil: aún más compacto */
+@media (max-width: 900px){
+  [data-testid="stAppViewContainer"] > .main .block-container{
+    padding-top: 6px !important;
+  }
+}
+
+/* Por si usas mi barra .tt-titlebar, que quede pegada arriba */
+.tt-titlebar{ margin-top: 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
