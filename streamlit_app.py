@@ -3,12 +3,15 @@
 #   pip install -r requirements.txt
 #   pip install extra-streamlit-components bcrypt
 #   streamlit run streamlit_app.py
+#.\.venv\Scripts\Activate
 
 from __future__ import annotations
 import streamlit as st
 st.set_page_config(page_title="Control de Gastos y Ventas", layout="wide")  # antes de cualquier widget
 
-import hashlib, pathlib  # <- sin from pathlib import hashlib
+import hashlib
+from pathlib import Path
+
 APP_BUILD = "TickeTo · 2025-08-13 nav-left-fix"
 
 def _app_sig() -> str:
@@ -23,12 +26,6 @@ with st.sidebar:
     st.caption(f"🧩 Build: {APP_BUILD}")
 
 st.markdown('<meta name="google" content="notranslate">', unsafe_allow_html=True)
-
-def _app_sig() -> str:
-    try:
-        return hashlib.sha1(pathlib.Path(__file__).read_bytes()).hexdigest()[:10]
-    except Exception:
-        return "nohash"
 
 # with st.sidebar:
 #     p = pathlib.Path(__file__).resolve()
@@ -119,7 +116,6 @@ from datetime import date, timedelta, datetime
 import sqlite3
 import pandas as pd
 import numpy as np
-from pathlib import Path
 import re
 import gspread
 from google.oauth2.service_account import Credentials
@@ -132,8 +128,6 @@ import streamlit.components.v1 as components
 # ---------------------------------------------------------
 # Ajuste visual por defecto (se puede cambiar en Admin)
 # ---------------------------------------------------------
-
-import hashlib, pathlib
 ADJ_VENTAS_EFECTIVO = 455_500.0
 DB_FILE = Path("finanzas.sqlite")
 
@@ -147,7 +141,12 @@ def _db_sig() -> tuple[int, int]:
         return (0, 0)
 
 # ========== Sesiones persistentes (cookie) + login/roles ==========
+
+
 APP_SECRET = os.environ.get("APP_SECRET", "cambia_esta_clave_larga_y_unica")
+if APP_SECRET == "cambia_esta_clave_larga_y_unica" and os.getenv("ALLOW_DEFAULT_SECRET", "0") != "1":
+    st.stop()
+    raise RuntimeError("APP_SECRET no configurado. Define APP_SECRET en variables de entorno.")
 SESSION_COOKIE = "finz_sess"
 
 # CookieManager como widget (evita CachedWidgetWarning)
@@ -156,33 +155,50 @@ def _cookie_mgr():
     return _cookie_widget
 
 # --- Password hashing (bcrypt -> fallback PBKDF2) ---
-try:
-    import bcrypt
-    def hash_password(pw: str) -> str:
-        return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    def verify_password(pw: str, hashed: str) -> bool:
-        try:
-            return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
-        except Exception:
-            return False
-except Exception:
-    def hash_password(pw: str) -> str:
+# --- Password hashing/verify universal (bcrypt + pbkdf2) ---
+import base64, os, hmac, hashlib
+
+def hash_password(pw: str) -> str:
+    try:
+        import bcrypt  # type: ignore
+        return "bcrypt$" + bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    except Exception:
         salt = os.urandom(16)
         dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, 200_000)
         return "pbkdf2$" + base64.b64encode(salt + dk).decode("utf-8")
-    def verify_password(pw: str, token: str) -> bool:
-        if not token.startswith("pbkdf2$"):
-            return False
+
+def _verify_pbkdf2(pw: str, token: str) -> bool:
+    try:
         raw = base64.b64decode(token.split("$",1)[1].encode("utf-8"))
         salt, dk_old = raw[:16], raw[16:]
         dk_new = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, 200_000)
         return hmac.compare_digest(dk_new, dk_old)
+    except Exception:
+        return False
 
-# --- Usuarios DEMO (fallback; en producción usamos tabla users) ---
-USERS = {
-    "admin": {"pw": hash_password("admin123"), "role": "admin"},
-    "user1": {"pw": hash_password("clave123"), "role": "user"},
-}
+def verify_password(pw: str, token: str) -> bool:
+    token = token or ""
+    if token.startswith("pbkdf2$"):
+        return _verify_pbkdf2(pw, token)
+    if token.startswith("bcrypt$") or token.startswith("$2"):
+        try:
+            import bcrypt  # type: ignore
+            raw = token.split("$",1)[1] if token.startswith("bcrypt$") else token
+            return bcrypt.checkpw(pw.encode("utf-8"), raw.encode("utf-8"))
+        except Exception:
+            return False
+    # Fallback: intenta pbkdf2 por si no tiene prefijo
+    return _verify_pbkdf2(pw, token)
+
+# --- Usuarios DEMO solo en desarrollo ---
+DEV_DEMO = os.getenv("DEV_DEMO_USERS", "0") == "1"
+USERS = {}
+if DEV_DEMO:
+    USERS = {
+        # Pon contraseñas “random” si de verdad necesitas demo local:
+        "admin": {"pw": hash_password(os.getenv("DEMO_ADMIN_PW", "cámbiame!")), "role": "admin"},
+        "user1": {"pw": hash_password(os.getenv("DEMO_USER1_PW", "cámbiame!")), "role": "user"},
+    }
 
 def _sign(data: dict) -> str:
     payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
@@ -217,7 +233,15 @@ def _issue_session(username: str, role: str):
     token = _sign(data)
     cm = _cookie_mgr(); cm.get_all()  # monta el widget
     expires_dt = datetime.now() + timedelta(seconds=int(ttl))
-    cm.set(SESSION_COOKIE, token, expires_at=expires_dt, key="set_"+SESSION_COOKIE)
+    cm.set(
+        SESSION_COOKIE,
+        token,
+        expires_at=expires_dt,
+        key="set_"+SESSION_COOKIE,
+        path="/",
+        secure=bool(os.getenv("COOKIE_SECURE", "1") == "1"),  # en local http puro puedes poner 0
+        same_site="Lax"
+    )
     st.session_state["auth_user"] = username
     st.session_state["auth_role"] = role
 
@@ -343,6 +367,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 def get_conn():
     conn = sqlite3.connect(DB_FILE)
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
     return conn
 
 def audit(action: str,
@@ -387,6 +412,9 @@ def ensure_indexes():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_trans_fecha   ON transacciones(fecha)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_trans_cliente ON transacciones(cliente_nombre)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_gastos_fecha  ON gastos(fecha)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts      ON audit_log(ts)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_log(action)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_table   ON audit_log(table_name)")
 
 ensure_indexes()
 
@@ -452,7 +480,9 @@ def ensure_admin_seed():
             # Garantiza rol/activo sin tocar password si ya existía
             conn.execute("UPDATE users SET role='admin', is_active=1 WHERE username='admin'")
     except Exception as e:
-        print("ensure_admin_seed error:", e)   
+        print("ensure_admin_seed error:", e)  
+
+ensure_admin_seed() 
 
 # ========== Login form ==========
 def login_form() -> None:
@@ -472,7 +502,6 @@ def login_form() -> None:
         if urec and urec["active"] and verify_password(password, urec["pw"]):
             st.session_state["sess_ttl"] = 7*24*3600 if remember else 12*3600
             _issue_session(uname, urec["role"])
-            # >>> AUDITORÍA: login OK (sqlite)
             audit("login.success", extra={
                 "remember": bool(remember),
                 "role": urec["role"],
@@ -481,23 +510,30 @@ def login_form() -> None:
             })
             st.success("Bienvenido 👋"); st.rerun()
         else:
-            # 2) Fallback DEMO
-            u_demo = USERS.get(uname)
-            if u_demo and verify_password(password, u_demo["pw"]):
-                st.session_state["sess_ttl"] = 7*24*3600 if remember else 12*3600
-                _issue_session(uname, u_demo.get("role", "user"))
-                # >>> AUDITORÍA: login OK (demo)
-                audit("login.success", extra={
-                    "remember": bool(remember),
-                    "role": u_demo.get("role", "user"),
-                    "src": "demo",
-                    "user_try": uname
-                })
-                st.success("Bienvenido 👋"); st.rerun()
-            else:
-                # >>> AUDITORÍA: login fallido
-                audit("login.failed", extra={"user_try": uname})
-                st.error("Usuario o contraseña inválidos")
+            # Si el usuario existe pero está inactivo, no intentes DEMO
+            if urec and not urec["active"]:
+                audit("login.disabled", extra={"user_try": uname})
+                st.error("Cuenta deshabilitada")
+                st.stop()
+
+            # 2) Fallback DEMO solo si está habilitado **y NO existe en SQLite**
+            if DEV_DEMO and urec is None:
+                u_demo = USERS.get(uname)
+                if u_demo and verify_password(password, u_demo["pw"]):
+                    st.session_state["sess_ttl"] = 7*24*3600 if remember else 12*3600
+                    _issue_session(uname, u_demo.get("role", "user"))
+                    audit("login.success", extra={
+                        "remember": bool(remember),
+                        "role": u_demo.get("role", "user"),
+                        "src": "demo",
+                        "user_try": uname
+                    })
+                    st.success("Bienvenido 👋"); st.rerun()
+                    return  # éxito demo
+
+            # Si llegas aquí, falló
+            audit("login.failed", extra={"user_try": uname})
+            st.error("Usuario o contraseña inválidos")
 
     st.stop()
 
@@ -731,28 +767,38 @@ def _parse_pesos(cell) -> float:
     if pd.isna(cell): return 0.0
     if isinstance(cell, (int, float, np.integer, np.floating)):
         try:
-            if np.isnan(float(cell)): return 0.0
+            x = float(cell)
+            return 0.0 if np.isnan(x) else float(round(x))
         except Exception:
-            pass
-        return float(round(float(cell)))
+            return 0.0
     s = str(cell).strip()
     if s == "": return 0.0
+    # Soporta (1.000), -1.000, 1.000,00
+    neg = False
+    if s.startswith("(") and s.endswith(")"):
+        neg = True
+        s = s[1:-1]
+    if s.startswith("−"):  # signo unicode
+        neg = True
+        s = s[1:]
+    if s.startswith("-"):
+        neg = True
+        s = s[1:]
     s = s.replace(" ", "")
-    has_dot = "." in s; has_com = "," in s
-    if has_dot and has_com:
-        s = s.replace(".", ""); s = s.split(",")[0]
-    elif has_com and not has_dot:
+    # Ignora decimales; conserva miles
+    if "," in s and "." in s:
+        s = s.replace(".", "").split(",")[0]
+    elif "," in s and "." not in s:
         parts = s.split(",")
-        if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]): s = "".join(parts)
-        else: s = parts[0]
-    elif has_dot and not has_com:
+        s = "".join(parts) if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]) else parts[0]
+    elif "." in s and "," not in s:
         parts = s.split(".")
-        if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]): s = "".join(parts)
-        else: s = parts[0]
+        s = "".join(parts) if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]) else parts[0]
     else:
         s = re.sub(r"\D", "", s)
-    s = re.sub(r"\D", "", s)
-    return float(s) if s else 0.0
+    s = re.sub(r"[^\d]", "", s)
+    val = float(s) if s else 0.0
+    return -val if neg else val
 
 def to_pesos_series(series: pd.Series) -> pd.Series:
     return series.apply(_parse_pesos).astype(float)
@@ -1035,12 +1081,57 @@ def delete_inventario_id(row_id: int):
         conn.execute("DELETE FROM inventario WHERE id=?", (int(row_id),))
     audit("delete", table_name="inventario", row_id=int(row_id), before=before)
 
+def update_venta_fields(row_id: int, **changes) -> bool:
+    """
+    Actualiza campos de una venta (fila de transacciones) de forma parcial.
+    Uso típico: update_venta_fields(123, abono2=50000)  # solo cambia abono2
+    También puedes pasar abono1, paga, etc.
+    """
+    allowed = {
+        "fecha", "cliente_nombre", "costo", "venta", "ganancia",
+        "debe_flag", "paga", "abono1", "abono2", "observacion"
+    }
+    if not changes:
+        return False
+
+    # Sanitiza tipos
+    payload = {}
+    for k, v in changes.items():
+        if k not in allowed:
+            continue
+        if k in {"costo", "venta", "ganancia", "abono1", "abono2"}:
+            payload[k] = _to_float(v)
+        elif k == "debe_flag":
+            payload[k] = _to_int(v)
+        elif k == "fecha":
+            payload[k] = _to_date_str(v)
+        else:
+            payload[k] = str(v or "").strip()
+
+    if not payload:
+        return False
+
+    with get_conn() as conn:
+        before = _fetch_row_as_dict(conn, "transacciones", int(row_id))
+        if before is None:
+            return False
+
+        sets = ", ".join([f"{k}=?" for k in payload.keys()])
+        vals = list(payload.values()) + [int(row_id)]
+        conn.execute(f"UPDATE transacciones SET {sets} WHERE id=?", vals)
+
+        after = before.copy()
+        after.update(payload)
+
+    audit("update", table_name="transacciones", row_id=int(row_id), before=before, after=after)
+    return True
+
 # =========================================================
 # Helpers UI
 # =========================================================
 def money(x: float) -> str:
     try:
-        return f"$ {x:,.0f}"
+        return f"($ {abs(x):,.0f})" if x < 0 else f"$ {x:,.0f}"
     except Exception:
         return "$ 0"
 
@@ -1052,6 +1143,10 @@ def notify_ok(msg: str):
         pass
 
 def currency_input(label: str, key: str, value: float = 0.0, help: str | None = None, in_form: bool = False) -> float:
+    # En móvil usamos number_input para teclado numérico nativo
+    if st.session_state.get("is_mobile", False):
+        return float(st.number_input(label, key=key, value=float(value), step=100.0, help=help))
+    # Desktop: tu implementación actual con formato
     state_key = f"{key}_txt"
     if state_key not in st.session_state:
         st.session_state[state_key] = f"{int(round(float(value))):,.0f}"
@@ -1071,6 +1166,12 @@ def df_format_money(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
         if c in d.columns:
             d[c] = pd.to_numeric(d[c], errors='coerce').fillna(0.0).map(money)
     return d
+
+def _reset_keys(keys: list[str]):
+    """Elimina claves del session_state para que los widgets vuelvan al valor por defecto en el próximo rerun."""
+    for k in keys:
+        st.session_state.pop(k, None)
+
 def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
     q1, q2 = st.columns([2,1])
     texto = q1.text_input("🔎 Buscar", key=f"q_{key}")
@@ -1096,31 +1197,22 @@ def _close_sidebar_on_mobile():
     components.html("""
     <script>
     (function () {
-      // Solo en pantallas angostas
       if (!window.matchMedia("(max-width: 900px)").matches) return;
-
       const doc = window.parent?.document || document;
 
       function clickClose(){
-        // distintos posibles botones/controles según versión de Streamlit
         const btn =
           doc.querySelector('[data-testid="stSidebarCollapseControl"] button') ||
           doc.querySelector('[data-testid="collapsedControl"]') ||
           doc.querySelector('[data-testid="stSidebarCollapseControl"]');
-
-        if (btn) {
-          btn.dispatchEvent(new MouseEvent('click', {bubbles:true}));
-          return true;
-        }
-        // Fallback: click al overlay si existe
+        if (btn) { btn.dispatchEvent(new MouseEvent('click', {bubbles:true})); return true; }
         const overlay = doc.querySelector('[data-testid="stSidebarOverlay"]');
         if (overlay){ overlay.click(); return true; }
-
         return false;
       }
-
-      // Intenta varias veces mientras el DOM termina de montar
       [0, 150, 400, 800].forEach(t => setTimeout(clickClose, t));
+      // Scroll a tope para que el usuario vea el título de la nueva sección
+      setTimeout(() => window.parent?.scrollTo({top:0, behavior:'smooth'}), 50);
     })();
     </script>
     """, height=0, width=0)
@@ -1309,7 +1401,7 @@ GOOGLE_SHEETS_ENABLED = bool(int(get_meta("GSHEETS_ENABLED", 1)))  # 1=on, 0=off
 GSERVICE_ACCOUNT_FILE = os.getenv("GSERVICE_ACCOUNT_FILE", "service_account.json")
 
 # Permite sobreescribir el ID desde Admin (meta)
-GSPREADSHEET_ID = str(get_meta("GSHEET_ID", "1enT3dV2pC1wGohR7bmd_Mk0x6TUo0nmFJUQp-i1-3p0"))
+GSPREADSHEET_ID = str(get_meta("GSHEET_ID", ""))  # vacío por defecto
 
 GS_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -1374,6 +1466,9 @@ def _read_table_direct(table: str) -> pd.DataFrame:
 
 def sync_tables_to_gsheet(tables: list[str]):
     if not GOOGLE_SHEETS_ENABLED:
+        return
+    if not GSPREADSHEET_ID:
+        st.warning("Configura el Google Sheet ID en Administración antes de sincronizar.")
         return
     for t in tables:
         try:
@@ -1628,12 +1723,6 @@ with st.sidebar:
 # =========================================================
 # Menú en la sidebar (reemplaza tabs)
 # =========================================================
-base_tabs = [
-    "🧮 Diario Consolidado", "📊 Panel de control", "🧾 Ventas",
-    "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "⬆️ Importar/Exportar", "👤 Deudores"
-]
-if is_admin():
-    base_tabs.append("🛠️ Administración")
 
 # ===================== NAV + HEADER =====================
 # (Estilo del menú en la sidebar)
@@ -1692,6 +1781,13 @@ tabs = [
     "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "⬆️ Importar/Exportar", "👤 Deudores"
 ] + (["🛠️ Administración"] if is_admin() else [])
 
+# === Auto-compact y flag móvil por parámetros de URL ===
+qp = st.query_params
+if qp.get("compact") == "1":
+    st.session_state["ui_compact"] = True
+if qp.get("m") == "1":
+    st.session_state["is_mobile"] = True
+
 with st.sidebar:
     # valor inicial SOLO la primera vez
     if "nav_left" not in st.session_state:
@@ -1727,6 +1823,33 @@ if st.session_state.get("ui_compact", False):
       /* Opcional: achica pastillas del menú lateral un poquito */
       section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
         padding:8px 10px;
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
+if st.session_state.get("ui_compact", False):
+    st.markdown("""
+    <style>
+      @media (max-width: 900px){
+        .stButton > button{ min-height: 40px; font-size: 15px; }
+        [data-testid="stMetric"]{ padding:12px 12px; }
+        /* Reduce el gap entre controles en columnas pequeñas */
+        .stColumn > div{ padding-top: 2px; padding-bottom: 2px; }
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
+if st.session_state.get("ui_compact", False):
+    st.markdown("""
+    <style>
+      /* En móvil: permitir wrap en celdas para evitar scroll lateral infinito */
+      @media (max-width: 900px){
+        [data-testid="stDataFrame"] table td,
+        [data-testid="stDataFrame"] table th{
+          white-space: normal !important;
+          word-break: break-word !important;
+        }
+        [data-testid="stDataFrame"] { height: 420px !important; }
       }
     </style>
     """, unsafe_allow_html=True)
@@ -1865,11 +1988,68 @@ st.markdown("""
 # Título siempre actualizado
 show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False)
 
+def quick_nav_mobile():
+    if not st.session_state.get("is_mobile", False):
+        return
+    st.markdown("### ")
+    map_short = {
+        "Consolidado":"🧮 Diario Consolidado",
+        "Ventas":"🧾 Ventas",
+        "Gastos":"💸 Gastos",
+        "Deudores":"👤 Deudores"
+    }
+    choice = st.radio("Ir a", list(map_short.keys()), horizontal=True, key="quick_nav_mob")
+    target = map_short[choice]
+    if st.session_state.get("nav_left") != target:
+        st.session_state["nav_left"] = target
+        st.rerun()
+
+# Llamado (una sola vez tras el header)
+quick_nav_mobile()
+
+components.html("""
+<script>
+(function(){
+  try{
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    var url = new URL(window.location.href);
+    var changed = false;
+    if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
+    if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
+    if (changed){
+      history.replaceState(null, "", url.toString());
+      setTimeout(function(){ location.reload(); }, 0);
+    }
+  }catch(e){}
+})();
+</script>
+""", height=0, width=0)
+
+components.html("""
+<script>
+(function(){
+  try{
+    // Solo pantallas angostas (móvil / tablet chica)
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+
+    // Si ya tiene compact=1, no hacemos nada
+    var url = new URL(window.location.href);
+    if (url.searchParams.get("compact")==="1") return;
+
+    // Añade compact=1 y recarga suave (una sola vez)
+    url.searchParams.set("compact","1");
+    history.replaceState(null, "", url.toString());
+    setTimeout(function(){ location.reload(); }, 0);
+  }catch(e){}
+})();
+</script>
+""", height=0, width=0)
+
 with st.container():
     a1, a2, a3 = st.columns([1,1,6])
     with a1.popover("➕ Venta", use_container_width=True):
         fv1, fv2 = st.columns(2)
-        q_fecha = fv1.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="QA_VTA_F")
+        q_fecha = fv1.date_input("Fecha", value=date.today(), max_value=date.today(), format="DD/MM/YYYY", key="QA_VTA_F")
         q_cliente = fv2.text_input("Cliente", key="QA_VTA_C")
         q_costo = currency_input("Costo", key="QA_VTA_COSTO")
         q_venta = currency_input("Venta", key="QA_VTA_VENTA")
@@ -1883,16 +2063,30 @@ with st.container():
                 'debe_flag': 1 if q_debe else 0, 'paga': '',
                 'abono1': 0.0, 'abono2': 0.0, 'observacion': q_obs
             })
+
+            # 🔄 Limpiar widgets de venta rápida (incluye los *_txt de currency_input)
+            _reset_keys([
+                "QA_VTA_F", "QA_VTA_C", "QA_VTA_DEBE", "QA_VTA_OBS",
+                "QA_VTA_COSTO_txt", "QA_VTA_VENTA_txt"
+            ])
+            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
             finish_and_refresh("Venta guardada ✅", ["transacciones"])
 
     with a2.popover("➕ Gasto", use_container_width=True):
         gg1, gg2 = st.columns(2)
-        qg_fecha = gg1.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="QA_GTO_F")
+        qg_fecha = gg1.date_input("Fecha", value=date.today(), max_value=date.today(), format="DD/MM/YYYY", key="QA_GTO_F")
         qg_conc  = gg2.text_input("Concepto", key="QA_GTO_C")
         qg_val   = currency_input("Valor", key="QA_GTO_V", value=0.0)
         qg_notas = st.text_input("Notas", key="QA_GTO_N")
         if st.button("Guardar gasto rápido", type="primary", key="QA_GTO_SAVE"):
             insert_gasto({'fecha': str(qg_fecha), 'concepto': qg_conc, 'valor': float(qg_val), 'notas': qg_notas})
+
+            # 🔄 Limpiar widgets de gasto rápido
+            _reset_keys([
+                "QA_GTO_F", "QA_GTO_C", "QA_GTO_N",
+                "QA_GTO_V_txt"
+            ])
+            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
             finish_and_refresh("Gasto guardado ✅", ["gastos"])
 
 def show(section: str) -> bool:
@@ -1952,6 +2146,7 @@ if show("🧮 Diario Consolidado"):
         upsert_consolidado("GLOBAL", float(CONS_efectivo), CONS_notas)
         nuevo_ef, _ = get_efectivo_global_now()
         metric_box.metric("EFECTIVO", money(nuevo_ef))
+        components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
         finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
 
     confirm_del = colD.checkbox("Confirmar eliminación", key="CONS_del_confirm")
@@ -1985,7 +2180,7 @@ elif show("📊 Panel de control"):
 # ---------------------------------------------------------
 elif show("🧾 Ventas"):
     f1c1, f1c2 = st.columns(2)
-    VTA_fecha = f1c1.date_input("Fecha", value=date.today(), key="VTA_fecha_rt", format="DD/MM/YYYY")
+    VTA_fecha = f1c1.date_input("Fecha", value=date.today(), max_value=date.today(), key="VTA_fecha_rt", format="DD/MM/YYYY")
     VTA_cliente = f1c2.text_input("Cliente", key="VTA_cliente_rt")
 
     f2c1, f2c2, f2c3 = st.columns(3)
@@ -2030,6 +2225,14 @@ elif show("🧾 Ventas"):
             'abono2': float(VTA_ab2),
             'observacion': VTA_obs,
         })
+
+        # 🔄 Limpiar widgets del formulario de Ventas
+        _reset_keys([
+            "VTA_fecha_rt", "VTA_cliente_rt", "VTA_debe_rt", "VTA_paga_rt", "VTA_obs_rt",
+            "VTA_costo_rt_txt", "VTA_venta_rt_txt", "VTA_ab1_rt_txt", "VTA_ab2_rt_txt",
+            "VTA_ganancia_view_rt"
+        ])
+        components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
         finish_and_refresh("Venta guardada", ["transacciones"])
 
     st.divider()
@@ -2097,6 +2300,62 @@ elif show("🧾 Ventas"):
         v_show = df_format_money(v_show, ['costo','venta','ganancia','abono1','abono2'])
         st.dataframe(v_show, use_container_width=True)
 
+        with st.expander("✏️ Editar venta (abonos)", expanded=False):
+            vv = read_ventas()
+            if vv.empty:
+                st.info("No hay ventas para editar.")
+            else:
+                opts = vv.sort_values('fecha', ascending=False).copy()
+                opts['label'] = opts.apply(
+                    lambda r: (
+                        f"#{int(r['id'])} • {r['fecha']} • {str(r['cliente_nombre'])[:25]} • "
+                        f"{money(float(r['venta']))} • Ab1 {money(float(r['abono1']))} • Ab2 {money(float(r['abono2']))}"
+                    ),
+                    axis=1
+                )
+                choice = st.selectbox("Selecciona la venta a editar", opts['label'].tolist(), key="ED_VTA_sel")
+
+                sel_id = int(choice.split("•")[0].strip().lstrip("#"))
+                row = vv.loc[vv["id"] == sel_id].iloc[0]
+
+                st.caption(f"Cliente: **{row['cliente_nombre']}** · Fecha: **{row['fecha']}** · Venta: **{money(float(row['venta']))}**")
+
+                kpref = f"ED_VTA_{sel_id}"
+                c1, c2 = st.columns(2)
+                with c1:
+                    new_ab1 = currency_input("Abono 1", key=f"{kpref}_ab1", value=float(row["abono1"]))
+                with c2:
+                    new_ab2 = currency_input("Abono 2", key=f"{kpref}_ab2", value=float(row["abono2"]))
+
+                total_abonos = float(new_ab1) + float(new_ab2)
+                st.write(f"**Abonos totales:** {money(total_abonos)}  / Venta: {money(float(row['venta']))}")
+
+                auto_paga = st.checkbox("Marcar PAGA automáticamente si Abono1+Abono2 ≥ Venta", value=True, key=f"{kpref}_auto_paga")
+                excede = total_abonos > float(row["venta"])
+                if excede:
+                    st.warning("Los abonos superan el valor de la venta. Verifica si es correcto.")
+                # Si quieres bloquear el guardado cuando excede, descomenta la siguiente línea:
+                # save_disabled = excede
+                save_disabled = False
+
+                if st.button("💾 Guardar cambios", type="primary", disabled=save_disabled, key=f"{kpref}_save"):
+                    changes = {}
+                    if float(new_ab1) != float(row["abono1"]):
+                        changes["abono1"] = float(new_ab1)
+                    if float(new_ab2) != float(row["abono2"]):
+                        changes["abono2"] = float(new_ab2)
+                    if auto_paga and total_abonos >= float(row["venta"]):
+                        changes["paga"] = "X"  # mantiene tu convención de PAGA
+
+                    if not changes:
+                        st.info("No hay cambios para guardar.")
+                    else:
+                        ok = update_venta_fields(sel_id, **changes)
+                        if ok:
+                            finish_and_refresh(f"Venta #{sel_id} actualizada ✅", ["transacciones"])
+                        else:
+                            st.error("No se pudo actualizar la venta.")
+
         with st.expander("🗑️ Eliminar venta", expanded=False):
             vv = read_ventas()
             if vv.empty:
@@ -2125,20 +2384,39 @@ elif show("🧾 Ventas"):
 # Gastos
 # ---------------------------------------------------------
 elif show("💸 Gastos"):
-    with st.form(key="GTO_form"):
+    # --- Predeclaraciones para Pylance (evita reportUndefinedVariable) ---
+    GTO_fecha: date | None = date.today()
+    GTO_conc: str = ""
+    GTO_valor: float = 0.0
+    GTO_notas: str = ""
+
+    with st.form(key="GTO_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        GTO_fecha = c1.date_input("Fecha", value=date.today(), key="GTO_fecha", format="DD/MM/YYYY")
+        GTO_fecha = c1.date_input(
+            "Fecha",
+            value=date.today(),
+            max_value=date.today(),              # bloquea fechas futuras
+            key="GTO_fecha",
+            format="DD/MM/YYYY"
+        )
         GTO_conc  = c2.text_input("Concepto", key="GTO_concepto")
+
         c3, c4 = st.columns(2)
         with c3:
             GTO_valor = currency_input("Valor", key="GTO_valor", value=0.0, in_form=True)
         with c4:
             GTO_notas = st.text_input("Notas", value="", key="GTO_notas")
+
         GTO_submit = st.form_submit_button("💾 Guardar gasto")
 
-    if GTO_submit:
-        insert_gasto({'fecha': str(GTO_fecha), 'concepto': GTO_conc,
-                      'valor': float(GTO_valor), 'notas': GTO_notas})
+    if GTO_submit and GTO_fecha is not None:
+        insert_gasto({
+            'fecha': str(GTO_fecha),
+            'concepto': GTO_conc,
+            'valor': float(GTO_valor),
+            'notas': GTO_notas
+        })
+        components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
         finish_and_refresh("Gasto guardado", ["gastos"])
 
     st.divider()
@@ -2201,7 +2479,7 @@ elif show("💸 Gastos"):
 # Préstamos
 # ---------------------------------------------------------
 elif show("🤝 Préstamos"):
-    with st.form(key="PRE_form"):
+    with st.form(key="PRE_form",clear_on_submit=True):
         c1, c2 = st.columns(2)
         PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
         with c2:
@@ -2240,7 +2518,7 @@ elif show("🤝 Préstamos"):
 # Inventario
 # ---------------------------------------------------------
 elif show("📦 Inventario"):
-    with st.form(key="INV_form"):
+    with st.form(key="INV_form",clear_on_submit=True):
         c1, c2 = st.columns(2)
         INV_prod  = c1.text_input("Producto", key="INV_producto")
         with c2:
@@ -2291,7 +2569,7 @@ elif show("👤 Deudores"):
 
     corte_actual = get_corte_deudores()
     with st.expander("⚙️ Fecha de corte para nuevos deudores (desde esta fecha se suman ventas a crédito)", expanded=False):
-        nueva_corte = st.date_input("Fecha de corte", value=corte_actual, key="CFG_CORTE_DEUDORES", format="DD/MM/YYYY")
+        nueva_corte = st.date_input("Fecha de corte", value=corte_actual, max_value=date.today(), key="CFG_CORTE_DEUDORES", format="DD/MM/YYYY")
         c1, c2 = st.columns(2)
         if c1.button("Guardar corte", type="primary"):
             set_corte_deudores(nueva_corte)
@@ -2487,4 +2765,3 @@ if is_admin() and show("🛠️ Administración"):
                 st.info("Sin registros con los filtros actuales.")
 
 # ---------------------------------------------------------
-st.caption("Ajuste visual aplicado a 'Ventas efectivas' y 'Ventas totales'. Cálculos internos intactos. Google Sheets configurable desde Admin. Fechas D/M/Y (dayfirst=True).")
