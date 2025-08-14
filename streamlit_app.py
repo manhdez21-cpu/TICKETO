@@ -7,11 +7,43 @@
 
 from __future__ import annotations
 import streamlit as st
+import streamlit.components.v1 as components 
+
 st.set_page_config(
     page_title="Control de Gastos y Ventas",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+def _close_sidebar_on_mobile():
+    components.html("""
+    <script>
+    (function () {
+      try{
+        if (!window.matchMedia("(max-width: 900px)").matches) return;
+        const doc = window.parent?.document || document;
+
+        // 1) Tocar el overlay (Drawer abierto)
+        const ov = doc.querySelector('[data-testid="stSidebarOverlay"]');
+        if (ov && ov.offsetParent !== null){ ov.click(); return; }
+
+        // 2) Botón de colapso (por si no hay overlay visible)
+        const btn =
+          doc.querySelector('[data-testid="stSidebarCollapseControl"] button') ||
+          doc.querySelector('[data-testid="collapsedControl"]') ||
+          doc.querySelector('[data-testid="stSidebarCollapseControl"]');
+        if (btn){ btn.click(); return; }
+
+        // 3) Fallback: fuerza oculto
+        const sb = doc.querySelector('section[data-testid="stSidebar"]');
+        if (sb){
+          sb.style.transform = 'translateX(-110%)';
+          sb.style.visibility = 'hidden';
+        }
+      }catch(e){}
+    })();
+    </script>
+    """, height=0, width=0)
 
 components.html("""
 <script>
@@ -31,26 +63,6 @@ components.html("""
 </script>
 """, height=0, width=0)
 
-components.html("""
-<script>
-(function(){
-  try{
-    // Solo pantallas angostas (móvil / tablet chica)
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
-
-    // Si ya tiene compact=1, no hacemos nada
-    var url = new URL(window.location.href);
-    if (url.searchParams.get("compact")==="1") return;
-
-    // Añade compact=1 y recarga suave (una sola vez)
-    url.searchParams.set("compact","1");
-    history.replaceState(null, "", url.toString());
-    setTimeout(function(){ location.reload(); }, 0);
-  }catch(e){}
-})();
-</script>
-""", height=0, width=0)
-
 import hashlib
 from pathlib import Path
 
@@ -58,13 +70,12 @@ APP_BUILD = "TickeTo · 2025-08-13 nav-left-fix"
 
 def _app_sig() -> str:
     try:
-        return hashlib.sha1(pathlib.Path(__file__).read_bytes()).hexdigest()[:10]
+        return hashlib.sha1(Path(__file__).read_bytes()).hexdigest()[:10]
     except Exception:
         return "nohash"
 
 with st.sidebar:
-    import pathlib
-    p = pathlib.Path(__file__).resolve()
+    p = Path(__file__).resolve()
     st.caption(f"🧩 Build: {APP_BUILD}")
 
 st.markdown('<meta name="google" content="notranslate">', unsafe_allow_html=True)
@@ -216,7 +227,6 @@ def _cookie_mgr():
 
 # --- Password hashing (bcrypt -> fallback PBKDF2) ---
 # --- Password hashing/verify universal (bcrypt + pbkdf2) ---
-import base64, os, hmac, hashlib
 
 def hash_password(pw: str) -> str:
     try:
@@ -251,7 +261,6 @@ def verify_password(pw: str, token: str) -> bool:
     return _verify_pbkdf2(pw, token)
 
 # --- Usuarios DEMO solo en desarrollo ---
-DEV_DEMO = os.getenv("DEV_DEMO_USERS", "0") == "1"
 USERS = {}
 if DEV_DEMO:
     USERS = {
