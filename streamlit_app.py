@@ -1511,6 +1511,91 @@ def sync_tables_to_gsheet(tables: list[str]):
         except Exception as e:
             st.warning(f"No se pudo sincronizar '{t}' a Google Sheets: {e}")
 
+# --- Restaurar SQLite desde Google Sheets si la BD está vacía ---
+def _gs_read_df(ws_title: str) -> pd.DataFrame:
+    if not GOOGLE_SHEETS_ENABLED or not GSPREADSHEET_ID:
+        return pd.DataFrame()
+    try:
+        ws = _gs_open_ws(ws_title)
+        values = ws.get_all_values()
+        if not values or len(values) <= 1 or (values and values[0] and values[0][0] == "(vacío)"):
+            return pd.DataFrame()
+        df = pd.DataFrame(values[1:], columns=values[0])
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+def _db_is_completely_empty() -> bool:
+    tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
+    total = 0
+    with get_conn() as conn:
+        for t in tables:
+            try:
+                total += int(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0])
+            except Exception:
+                pass
+    return total == 0
+
+def restore_from_gsheets_if_empty():
+    if not GOOGLE_SHEETS_ENABLED or not GSPREADSHEET_ID:
+        return
+    # Evita repetir en el mismo run
+    if st.session_state.get("_restored_from_gsheets"): 
+        return
+    if not _db_is_completely_empty():
+        return
+
+    try:
+        # Transacciones
+        df = _gs_read_df(GSHEET_MAP["transacciones"])
+        if not df.empty:
+            df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
+            for _, r in df.iterrows():
+                insert_venta(r.to_dict())
+
+        # Gastos
+        df = _gs_read_df(GSHEET_MAP["gastos"])
+        if not df.empty:
+            df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
+            for _, r in df.iterrows():
+                insert_gasto(r.to_dict())
+
+        # Prestamos
+        df = _gs_read_df(GSHEET_MAP["prestamos"])
+        if not df.empty:
+            df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
+            for _, r in df.iterrows():
+                insert_prestamo(r.to_dict())
+
+        # Inventario
+        df = _gs_read_df(GSHEET_MAP["inventario"])
+        if not df.empty:
+            df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
+            for _, r in df.iterrows():
+                insert_inventario(r.to_dict())
+
+        # Consolidado (incluye "GLOBAL")
+        df = _gs_read_df(GSHEET_MAP["consolidado_diario"])
+        if not df.empty:
+            for _, r in df.iterrows():
+                upsert_consolidado(str(r.get("fecha") or r.get("FECHA")), 
+                                   _to_float(r.get("efectivo") or r.get("EFECTIVO")), 
+                                   str(r.get("notas") or r.get("NOTAS") or ""))
+
+        # Deudores iniciales
+        df = _gs_read_df(GSHEET_MAP["deudores_ini"])
+        if not df.empty:
+            df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
+            for _, r in df.iterrows():
+                insert_deudor_ini(r.to_dict())
+
+        st.session_state["_restored_from_gsheets"] = True
+        notify_ok("Base restaurada automáticamente desde Google Sheets.")
+        st.cache_data.clear()
+
+    except Exception as e:
+        st.warning(f"No se pudo restaurar desde Google Sheets: {e}")
+
 # ========= Refresco estandarizado =========
 def finish_and_refresh(msg: str = "Listo ✅", tables_to_sync: list[str] | None = None):
     try:
@@ -1521,6 +1606,7 @@ def finish_and_refresh(msg: str = "Listo ✅", tables_to_sync: list[str] | None 
         st.cache_data.clear()
         st.rerun()
 
+restore_from_gsheets_if_empty()
 # =========================
 # Backups automáticos (SQLite)
 # =========================
