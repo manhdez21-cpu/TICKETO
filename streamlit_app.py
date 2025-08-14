@@ -1427,6 +1427,11 @@ GSERVICE_ACCOUNT_FILE = os.getenv("GSERVICE_ACCOUNT_FILE", "service_account.json
 
 # Permite sobreescribir el ID desde Admin (meta)
 GSPREADSHEET_ID = str(get_meta("GSHEET_ID", ""))  # vacío por defecto
+try:
+    if not GSPREADSHEET_ID:
+        GSPREADSHEET_ID = st.secrets.get("GSHEET_ID", "") or os.getenv("GSHEET_ID", "")
+except Exception:
+    GSPREADSHEET_ID = os.getenv("GSHEET_ID", "")
 
 GS_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
