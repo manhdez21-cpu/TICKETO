@@ -2044,27 +2044,31 @@ with st.sidebar:
 
 current = st.session_state["nav_left"]
 
-components.html("""
+st.markdown("""
 <style>
 @media (max-width: 900px){
-  /* Sidebar más angosta en móvil */
+  /* Sidebar más angosta y oculta por defecto (se abre con data-tt-open="1") */
   section[data-testid='stSidebar']{
     width: 68vw !important;
     min-width: 260px !important;
     max-width: 420px !important;
     transition: transform .25s ease, visibility .25s ease !important;
-    transform: translateX(-110%);   /* oculta por defecto */
+    transform: translateX(-110%);
     visibility: hidden;
     z-index: 2000 !important;
   }
+  section[data-testid='stSidebar'][data-tt-open='1']{
+    transform: translateX(0) !important;
+    visibility: visible !important;
+  }
 
-  /* Oculta el control nativo de Streamlit en móvil */
+  /* Oculta el control nativo en móvil (dejamos solo nuestro burger) */
   [data-testid='stSidebarCollapseControl'],
   [data-testid='collapsedControl']{
     display:none !important;
   }
 
-  /* Botón flotante (hamburguesa) naranja */
+  /* Botón hamburguesa naranja (fuera de la sidebar) */
   #tt-burger{
     position: fixed;
     top: 14px; left: 14px;
@@ -2074,94 +2078,78 @@ components.html("""
     box-shadow: 0 10px 24px rgba(0,0,0,.18);
     cursor: pointer; z-index: 2100;
   }
-  #tt-burger:before, #tt-burger:after, #tt-burger i{
-    content:""; display:block; width:22px; height:3px;
-    background:#fff; border-radius:2px; margin:3px auto;
+  #tt-burger span{
+    display:block; width:22px; height:3px; background:#fff; border-radius:2px;
+    margin:4px auto;
     box-shadow: 0 1px 0 rgba(0,0,0,.08);
   }
 
-  /* Overlay propio cuando la sidebar está abierta */
-  #tt-ov{
-    position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999;
-  }
-
-  /* Estado abierto (lo pone el script) */
-  section[data-testid='stSidebar'][data-tt-open='1']{
-    transform: translateX(0) !important;
-    visibility: visible !important;
-  }
+  /* Overlay cuando la sidebar está abierta */
+  #tt-ov{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999; }
 }
 </style>
+""", unsafe_allow_html=True)
+
+components.html("""
 <script>
 (function(){
   try{
     if(!matchMedia('(max-width: 900px)').matches) return;
     const doc = (window.parent || window).document;
 
-    function qs(s, r){ return (r||doc).querySelector(s); }
+    const qs = (s, r) => (r||doc).querySelector(s);
 
-    function ensureBurger(){
+    function addBurger(){
       if(qs('#tt-burger')) return;
       const b = doc.createElement('button');
       b.id = 'tt-burger';
-      const i = doc.createElement('i'); b.appendChild(i); // 3 rayitas (via CSS)
-      b.appendChild(doc.createElement('i')); b.appendChild(doc.createElement('i'));
+      // 3 rayitas
+      for(let i=0;i<3;i++){ const bar = doc.createElement('span'); b.appendChild(bar); }
       b.addEventListener('click', toggle);
       doc.body.appendChild(b);
     }
 
-    function ensureOverlay(){
+    function addOverlay(){
       if(qs('#tt-ov')) return;
-      const ov = doc.createElement('div'); ov.id='tt-ov';
+      const ov = doc.createElement('div');
+      ov.id='tt-ov';
       ov.addEventListener('click', close);
       doc.body.appendChild(ov);
     }
-
-    function removeOverlay(){
-      const ov = qs('#tt-ov'); if(ov) ov.remove();
-    }
+    function removeOverlay(){ const ov = qs('#tt-ov'); if(ov) ov.remove(); }
 
     function open(){
-      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
-      sb.setAttribute('data-tt-open','1'); ensureOverlay();
+      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
+      sb.setAttribute('data-tt-open','1'); addOverlay();
     }
-
     function close(){
-      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
+      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
       sb.removeAttribute('data-tt-open'); removeOverlay();
     }
-
     function toggle(){
-      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
+      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
       sb.getAttribute('data-tt-open') === '1' ? close() : open();
     }
 
+    // Cerrar automáticamente cuando tocan una opción del menú
     function autoCloseOnRadio(){
-      const sb = qs(\"section[data-testid='stSidebar']\"); if(!sb) return;
-      const rg = sb.querySelector(\"div[role='radiogroup']\"); if(!rg) return;
-      rg.addEventListener('click', function(e){
-        const label = e.target.closest('label'); if(!label) return;
-        // Cuando el usuario toca una opción, cerramos tras un micro-delay
-        setTimeout(close, 60);
+      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
+      const rg = sb.querySelector("div[role='radiogroup']"); if(!rg) return;
+      rg.addEventListener('click', (e) => {
+        if(e.target.closest('label')) setTimeout(close, 60);
       }, {capture:true});
     }
 
     function init(){
-      const sb = qs(\"section[data-testid='stSidebar']\");
-      if(!sb) return false;
-      // arranca oculta en móvil
-      sb.removeAttribute('data-tt-open');
-      ensureBurger();
+      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return false;
+      sb.removeAttribute('data-tt-open'); // arranca cerrada
+      addBurger();
       autoCloseOnRadio();
       return true;
     }
 
-    // Espera a que aparezca la sidebar (tras cada rerun)
     let tries = 0;
-    const t = setInterval(function(){
-      if(init() || ++tries > 40) clearInterval(t);
-    }, 80);
-
+    const t = setInterval(() => { if(init() || ++tries > 40) clearInterval(t); }, 80);
   }catch(e){}
 })();
 </script>
@@ -2409,32 +2397,32 @@ st.markdown("""
 show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False)
 
 # --- POPUP DE MENÚ PARA MÓVIL (reemplaza la sidebar en pantallas chicas) ---
-if st.session_state.get("is_mobile", False):
-    lcol, rcol = st.columns([1,6])
-    with lcol:  # botón al lado del título
-        pop = st.popover("☰ Menú", use_container_width=False)
-    with pop:
-        choice = st.radio(
-            "Ir a",
-            tabs,
-            index=tabs.index(st.session_state["nav_left"]),
-            label_visibility="collapsed",
-            key="nav_pop"
-        )
-        if choice != st.session_state["nav_left"]:
-            st.session_state["nav_left"] = choice
-            st.rerun()
+# if st.session_state.get("is_mobile", False):
+#     lcol, rcol = st.columns([1,6])
+#     with lcol:  # botón al lado del título
+#         pop = st.popover("☰ Menú", use_container_width=False)
+#     with pop:
+#         choice = st.radio(
+#             "Ir a",
+#             tabs,
+#             index=tabs.index(st.session_state["nav_left"]),
+#             label_visibility="collapsed",
+#             key="nav_pop"
+#         )
+#         if choice != st.session_state["nav_left"]:
+#             st.session_state["nav_left"] = choice
+#             st.rerun()
 
-    # Oculta sidebar en móvil cuando usamos el popover
-    st.markdown("""
-    <style>
-    @media (max-width: 900px){
-      section[data-testid="stSidebar"]{ display:none !important; }
-      [data-testid="stSidebarCollapseControl"],
-      [data-testid="collapsedControl"]{ display:none !important; }
-    }
-    </style>
-    """, unsafe_allow_html=True)
+#     # Oculta sidebar en móvil cuando usamos el popover
+#     st.markdown("""
+#     <style>
+#     @media (max-width: 900px){
+#       section[data-testid="stSidebar"]{ display:none !important; }
+#       [data-testid="stSidebarCollapseControl"],
+#       [data-testid="collapsedControl"]{ display:none !important; }
+#     }
+#     </style>
+#     """, unsafe_allow_html=True)
 
 show_flash_if_any()
 
