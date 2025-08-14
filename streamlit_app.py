@@ -2865,6 +2865,19 @@ elif show("👤 Deudores"):
             st.dataframe(uni_show, use_container_width=True)
         else:
             st.write("Aún no hay nuevos saldos provenientes de Ventas desde la fecha de corte.")
+    with st.expander("🧪 ¿Qué ventas están generando 'NUEVO'?", expanded=True):
+        vdbg = read_ventas().copy()
+        if not vdbg.empty:
+            vdbg["CLIENTE"] = vdbg["cliente_nombre"].astype(str).str.strip().str.upper()
+            for c in ["venta","abono1","abono2","debe_flag"]:
+                vdbg[c] = pd.to_numeric(vdbg[c], errors="coerce").fillna(0.0)
+            vdbg = vdbg[(vdbg["fecha"] >= corte_actual) & (vdbg["debe_flag"] == 1)]
+            vdbg["SALDO_NUEVO"] = (vdbg["venta"] - (vdbg["abono1"] + vdbg["abono2"])).clip(lower=0.0)
+            cols = ["fecha","CLIENTE","observacion","venta","abono1","abono2","paga","SALDO_NUEVO"]
+            st.dataframe(vdbg[cols].sort_values(["CLIENTE","fecha"]), use_container_width=True)
+            st.caption(f"Filtrado por fecha ≥ {corte_actual} y DEBE=1")
+        else:
+            st.write("No hay ventas.")
 
 # ---------------------------------------------------------
 # Importar/Exportar (Nuevo: todo en uno)
