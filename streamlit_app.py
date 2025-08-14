@@ -105,11 +105,17 @@ header[data-testid="stHeader"] > div { background: transparent !important; box-s
 .tt-sticky{ z-index: 1000 !important; }
 
 /* El control de colapso/expandir sidebar siempre por encima y clickeable */
-[data-testid="stSidebarCollapseControl"],
-[data-testid="collapsedControl"]{
-  z-index: 2000 !important;
-  pointer-events: auto !important;
+st.markdown("""
+<style>
+@media (min-width: 901px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="collapsedControl"]{
+    z-index: 2000 !important;
+    pointer-events: auto !important;
+  }
 }
+</style>
+""", unsafe_allow_html=True)
 </style>
 """, unsafe_allow_html=True)
 
@@ -2044,51 +2050,51 @@ with st.sidebar:
 
 current = st.session_state["nav_left"]
 
-st.markdown("""
-<style>
-@media (max-width: 900px){
-  /* Sidebar más angosta y oculta por defecto (se abre con data-tt-open="1") */
-  section[data-testid='stSidebar']{
-    width: 68vw !important;
-    min-width: 260px !important;
-    max-width: 420px !important;
-    transition: transform .25s ease, visibility .25s ease !important;
-    transform: translateX(-110%);
-    visibility: hidden;
-    z-index: 2000 !important;
-  }
-  section[data-testid='stSidebar'][data-tt-open='1']{
-    transform: translateX(0) !important;
-    visibility: visible !important;
-  }
+# st.markdown("""
+# <style>
+# @media (max-width: 900px){
+#   /* Sidebar más angosta y oculta por defecto (se abre con data-tt-open="1") */
+#   section[data-testid='stSidebar']{
+#     width: 68vw !important;
+#     min-width: 260px !important;
+#     max-width: 420px !important;
+#     transition: transform .25s ease, visibility .25s ease !important;
+#     transform: translateX(-110%);
+#     visibility: hidden;
+#     z-index: 2000 !important;
+#   }
+#   section[data-testid='stSidebar'][data-tt-open='1']{
+#     transform: translateX(0) !important;
+#     visibility: visible !important;
+#   }
 
-  /* Oculta el control nativo en móvil (dejamos solo nuestro burger) */
-  [data-testid='stSidebarCollapseControl'],
-  [data-testid='collapsedControl']{
-    display:none !important;
-  }
+#   /* Oculta el control nativo en móvil (dejamos solo nuestro burger) */
+#   [data-testid='stSidebarCollapseControl'],
+#   [data-testid='collapsedControl']{
+#     display:none !important;
+#   }
 
-  /* Botón hamburguesa naranja (fuera de la sidebar) */
-  #tt-burger{
-    position: fixed;
-    top: 14px; left: 14px;
-    width: 52px; height: 52px;
-    border: 0; border-radius: 999px;
-    background: linear-gradient(135deg,#f97316,#f59e0b);
-    box-shadow: 0 10px 24px rgba(0,0,0,.18);
-    cursor: pointer; z-index: 2100;
-  }
-  #tt-burger span{
-    display:block; width:22px; height:3px; background:#fff; border-radius:2px;
-    margin:4px auto;
-    box-shadow: 0 1px 0 rgba(0,0,0,.08);
-  }
+#   /* Botón hamburguesa naranja (fuera de la sidebar) */
+#   #tt-burger{
+#     position: fixed;
+#     top: 14px; left: 14px;
+#     width: 52px; height: 52px;
+#     border: 0; border-radius: 999px;
+#     background: linear-gradient(135deg,#f97316,#f59e0b);
+#     box-shadow: 0 10px 24px rgba(0,0,0,.18);
+#     cursor: pointer; z-index: 2100;
+#   }
+#   #tt-burger span{
+#     display:block; width:22px; height:3px; background:#fff; border-radius:2px;
+#     margin:4px auto;
+#     box-shadow: 0 1px 0 rgba(0,0,0,.08);
+#   }
 
-  /* Overlay cuando la sidebar está abierta */
-  #tt-ov{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999; }
-}
-</style>
-""", unsafe_allow_html=True)
+#   /* Overlay cuando la sidebar está abierta */
+#   #tt-ov{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999; }
+# }
+# </style>
+# """, unsafe_allow_html=True)
 
 components.html("""
 <script>
@@ -2388,6 +2394,21 @@ st.markdown("""
   [data-testid="stSidebarCollapseControl"]{
     top: 8px !important;
     left: 8px !important;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* En móvil ocultamos por completo el botón nativo de Streamlit */
+@media (max-width: 900px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="stSidebarCollapseControl"] *,
+  [data-testid="collapsedControl"]{
+    display:none !important;
+    visibility:hidden !important;
+    pointer-events:none !important;
   }
 }
 </style>
