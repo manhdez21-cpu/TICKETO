@@ -1172,6 +1172,31 @@ def _reset_keys(keys: list[str]):
     for k in keys:
         st.session_state.pop(k, None)
 
+def clear_venta_form_rt():
+    # cubre desktop (keys *_txt) y móvil (keys sin _txt)
+    _reset_keys([
+        "VTA_fecha_rt", "VTA_cliente_rt", "VTA_debe_rt", "VTA_paga_rt", "VTA_obs_rt",
+        "VTA_costo_rt_txt", "VTA_costo_rt",
+        "VTA_venta_rt_txt", "VTA_venta_rt",
+        "VTA_ab1_rt_txt", "VTA_ab1_rt",
+        "VTA_ab2_rt_txt", "VTA_ab2_rt",
+        "VTA_ganancia_view_rt",
+    ])
+    # Fuerza vacío por si el navegador/autofill insiste
+    st.session_state["VTA_cliente_rt"] = ""
+
+def clear_gasto_form():
+    _reset_keys([
+        "GTO_fecha", "GTO_concepto", "GTO_notas",
+        "GTO_valor_txt", "GTO_valor",   # desktop y móvil
+    ])
+
+def clear_inventario_form():
+    _reset_keys([
+        "INV_producto",
+        "INV_valor_costo_txt", "INV_valor_costo",  # desktop y móvil
+    ])
+
 def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
     q1, q2 = st.columns([2,1])
     texto = q1.text_input("🔎 Buscar", key=f"q_{key}")
@@ -2233,6 +2258,7 @@ elif show("🧾 Ventas"):
             "VTA_ganancia_view_rt"
         ])
         components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
+        clear_venta_form_rt()
         finish_and_refresh("Venta guardada", ["transacciones"])
 
     st.divider()
@@ -2417,6 +2443,7 @@ elif show("💸 Gastos"):
             'notas': GTO_notas
         })
         components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
+        clear_gasto_form()
         finish_and_refresh("Gasto guardado", ["gastos"])
 
     st.divider()
@@ -2526,6 +2553,7 @@ elif show("📦 Inventario"):
         INV_submit = st.form_submit_button("💾 Guardar ítem")
     if INV_submit:
         insert_inventario({'producto': INV_prod, 'valor_costo': float(INV_costo)})
+        clear_inventario_form()
         finish_and_refresh("Ítem guardado", ["inventario"])
 
     st.divider()
