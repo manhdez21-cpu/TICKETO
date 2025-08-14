@@ -2220,6 +2220,69 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+/* ========= BOTÓN HAMBURGUESA LLAMATIVO ========= */
+[data-testid="stSidebarCollapseControl"] button,
+[data-testid="collapsedControl"]{
+  width: 46px !important;
+  height: 46px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg,#6366f1,#22d3ee) !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: 0 6px 16px rgba(99,102,241,.35), 0 2px 4px rgba(0,0,0,.16) !important;
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  z-index: 2000 !important;
+  cursor: pointer;
+}
+
+/* Oculta el SVG y dibuja 3 barras blancas */
+[data-testid="stSidebarCollapseControl"] button svg,
+[data-testid="collapsedControl"] svg{ display:none !important; }
+
+[data-testid="stSidebarCollapseControl"] button::before,
+[data-testid="collapsedControl"]::before{
+  content:"";
+  display:block;
+  width:22px; height:14px; margin:auto;
+  position:relative;
+  box-shadow:
+    0 -6px 0 0 #fff,
+    0  0 0 0 #fff,
+    0  6px 0 0 #fff;
+}
+
+[data-testid="stSidebarCollapseControl"] button:hover,
+[data-testid="collapsedControl"]:hover{
+  transform: translateY(-1px) scale(1.04);
+}
+
+/* Efecto pulse cuando está colapsado */
+@keyframes tt-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(99,102,241,.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(99,102,241,0); }
+  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+}
+[data-testid="collapsedControl"]{
+  animation: tt-pulse 2.2s ease-out infinite;
+}
+
+/* ========= SIDEBAR MÁS ANGOSTA EN MÓVIL ========= */
+@media (max-width: 900px){
+  section[data-testid="stSidebar"]{
+    width: 232px !important;
+    min-width: 232px !important;
+  }
+  /* reposiciona el botón para que no tape contenido */
+  [data-testid="stSidebarCollapseControl"]{
+    top: 8px !important;
+    left: 8px !important;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Título siempre actualizado
 show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False)
 show_flash_if_any()
