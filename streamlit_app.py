@@ -2222,7 +2222,7 @@ st.markdown("""
 
 st.markdown("""
 <style>
-/* ========= BOTÓN HAMBURGUESA LLAMATIVO ========= */
+/* ========= BOTÓN HAMBURGUESA LLAMATIVO (centrado de verdad) ========= */
 [data-testid="stSidebarCollapseControl"] button,
 [data-testid="collapsedControl"]{
   width: 46px !important;
@@ -2230,27 +2230,33 @@ st.markdown("""
   border-radius: 999px !important;
   background: linear-gradient(135deg,#6366f1,#22d3ee) !important;
   border: 0 !important;
-  outline: none !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;              /* <— clave para centrar el ::before */
   box-shadow: 0 6px 16px rgba(99,102,241,.35), 0 2px 4px rgba(0,0,0,.16) !important;
   transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
   z-index: 2000 !important;
   cursor: pointer;
 }
 
-/* Oculta el SVG y dibuja 3 barras blancas */
+/* Oculta el icono SVG original */
 [data-testid="stSidebarCollapseControl"] button svg,
 [data-testid="collapsedControl"] svg{ display:none !important; }
 
+/* 3 barras centradas */
 [data-testid="stSidebarCollapseControl"] button::before,
 [data-testid="collapsedControl"]::before{
   content:"";
-  display:block;
-  width:22px; height:14px; margin:auto;
-  position:relative;
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px; height: 2px;                   /* barra central */
+  background:#fff; border-radius: 2px;
   box-shadow:
-    0 -6px 0 0 #fff,
-    0  0 0 0 #fff,
-    0  6px 0 0 #fff;
+    0 -6px 0 0 #fff,                           /* barra superior */
+    0  6px 0 0 #fff;                           /* barra inferior */
 }
 
 [data-testid="stSidebarCollapseControl"] button:hover,
@@ -2274,7 +2280,6 @@ st.markdown("""
     width: 232px !important;
     min-width: 232px !important;
   }
-  /* reposiciona el botón para que no tape contenido */
   [data-testid="stSidebarCollapseControl"]{
     top: 8px !important;
     left: 8px !important;
