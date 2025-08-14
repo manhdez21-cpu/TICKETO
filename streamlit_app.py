@@ -2435,27 +2435,27 @@ if st.session_state.get("is_mobile", False):
     }
     </style>
     """, unsafe_allow_html=True)
-    
+
 show_flash_if_any()
 
-def quick_nav_mobile():
-    if not st.session_state.get("is_mobile", False):
-        return
-    st.markdown("### ")
-    map_short = {
-        "Consolidado":"🧮 Diario Consolidado",
-        "Ventas":"🧾 Ventas",
-        "Gastos":"💸 Gastos",
-        "Deudores":"👤 Deudores"
-    }
-    choice = st.radio("Ir a", list(map_short.keys()), horizontal=True, key="quick_nav_mob")
-    target = map_short[choice]
-    if st.session_state.get("nav_left") != target:
-        st.session_state["nav_left"] = target
-        st.rerun()
+# def quick_nav_mobile():
+#     if not st.session_state.get("is_mobile", False):
+#         return
+#     st.markdown("### ")
+#     map_short = {
+#         "Consolidado":"🧮 Diario Consolidado",
+#         "Ventas":"🧾 Ventas",
+#         "Gastos":"💸 Gastos",
+#         "Deudores":"👤 Deudores"
+#     }
+#     choice = st.radio("Ir a", list(map_short.keys()), horizontal=True, key="quick_nav_mob")
+#     target = map_short[choice]
+#     if st.session_state.get("nav_left") != target:
+#         st.session_state["nav_left"] = target
+#         st.rerun()
 
-# Llamado (una sola vez tras el header)
-quick_nav_mobile()
+# # Llamado (una sola vez tras el header)
+# quick_nav_mobile()
 
 with st.container():
     a1, a2, a3 = st.columns([1,1,6])
