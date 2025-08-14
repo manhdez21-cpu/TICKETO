@@ -2407,6 +2407,35 @@ st.markdown("""
 
 # Título siempre actualizado
 show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False)
+
+# --- POPUP DE MENÚ PARA MÓVIL (reemplaza la sidebar en pantallas chicas) ---
+if st.session_state.get("is_mobile", False):
+    lcol, rcol = st.columns([1,6])
+    with lcol:  # botón al lado del título
+        pop = st.popover("☰ Menú", use_container_width=False)
+    with pop:
+        choice = st.radio(
+            "Ir a",
+            tabs,
+            index=tabs.index(st.session_state["nav_left"]),
+            label_visibility="collapsed",
+            key="nav_pop"
+        )
+        if choice != st.session_state["nav_left"]:
+            st.session_state["nav_left"] = choice
+            st.rerun()
+
+    # Oculta sidebar en móvil cuando usamos el popover
+    st.markdown("""
+    <style>
+    @media (max-width: 900px){
+      section[data-testid="stSidebar"]{ display:none !important; }
+      [data-testid="stSidebarCollapseControl"],
+      [data-testid="collapsedControl"]{ display:none !important; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
 show_flash_if_any()
 
 def quick_nav_mobile():
