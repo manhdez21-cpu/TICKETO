@@ -442,39 +442,28 @@ def _issue_session(username: str, role: str):
     ttl = st.session_state.get("sess_ttl", 7*24*3600)
     data = {"sub": username, "role": role, "exp": int(time.time()) + int(ttl)}
     token = _sign(data)
-    cm = _cookie_mgr(); cm.get_all()  # monta el widget
+    cm = _cookie_mgr(); cm.get_all()
     expires_dt = datetime.now() + timedelta(seconds=int(ttl))
-    cm.set(
-        SESSION_COOKIE,
-        token,
-        expires_at=expires_dt,
-        key="set_"+SESSION_COOKIE,
-        path="/",
-        secure=COOKIE_SECURE_FLAG,  # en local http puro puedes poner 0
-        same_site="Lax"
-    )
+    cm.set(SESSION_COOKIE, token, expires_at=expires_dt, key="set_"+SESSION_COOKIE,
+           path="/", secure=COOKIE_SECURE_FLAG, same_site="Lax")
     st.session_state["auth_user"] = username
     st.session_state["auth_role"] = role
+    st.session_state.pop(LOGOUT_SENTINEL, None)
 
 def _clear_session():
     cm = _cookie_mgr()
-    try:
-        cm.get_all()  # monta el widget en el DOM
-    except Exception:
-        pass
+    try: cm.get_all()
+    except Exception: pass
 
-    # 1) intenta borrar si existe (clave única para forzar render del componente)
     try:
         if cm.get(SESSION_COOKIE) is not None:
             cm.delete(SESSION_COOKIE, key=f"del_{int(time.time())}")
     except Exception:
         pass
 
-    # 2) fuerza expiración por si el delete no llegó a tiempo
     try:
         cm.set(
-            SESSION_COOKIE,
-            "",
+            SESSION_COOKIE, "",
             expires_at=datetime.utcnow() - timedelta(days=1),
             key=f"exp_{int(time.time())}",
         )
@@ -484,6 +473,7 @@ def _clear_session():
     # limpia el estado de la app
     st.session_state.pop("auth_user", None)
     st.session_state.pop("auth_role", None)
+    st.session_state[LOGOUT_SENTINEL] = True   # 👈👈 NUEVO: fuerza logout en el próximo rerun
 
 def logout_and_refresh():
     _clear_session()            # borra cookie + session_state
@@ -494,6 +484,8 @@ def logout_and_refresh():
 
 def current_user() -> tuple[str | None, str | None]:
     """Devuelve (usuario, rol). Si la cookie vieja no trae rol, aplica fallback por nombre."""
+    if st.session_state.get(LOGOUT_SENTINEL):
+        return None, None
     u = st.session_state.get("auth_user")
     r = st.session_state.get("auth_role")
     if u:
@@ -3467,7 +3459,7 @@ show_flash_if_any()
 def show(section: str) -> bool:
     return current == section
 
-
+LOGOUT_SENTINEL = "__force_logout"
 
 # ---------------------------------------------------------
 # Diario consolidado
