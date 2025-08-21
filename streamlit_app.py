@@ -1963,13 +1963,15 @@ def show_sticky_header(title_text: str,
                        logo_path: str | None = None,
                        show_brand_text: bool = False,
                        fixed: bool = False,
-                       warn_if_missing: bool = True):
+                       warn_if_missing: bool = True,
+                       username: str | None = None):
+    user_html = f'<div class="r"><span class="tt-user">👤 {username}</span></div>' if username else '<div class="r"></div>'
     st.markdown(
         f'''
         <div class="tt-titlebar" role="banner">
           <div class="l"></div>
           <div class="ttl">{_clean_title(title_text)}</div>
-          <div class="r"></div>
+          {user_html}
         </div>
         ''',
         unsafe_allow_html=True
@@ -3285,7 +3287,7 @@ form [data-testid="stVerticalBlock"]{ gap:4px !important; }
 
 
 # Título siempre actualizado
-show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False)
+show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False, username=user)
 
 st.markdown("""
 <style id="typography-hierarchy-reset">
@@ -3367,6 +3369,25 @@ details[data-testid="stExpander"],
 }
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+.tt-titlebar .tt-user{
+  display:inline-block; padding:6px 10px; border-radius:999px;
+  border:1px solid rgba(120,120,135,.18);
+  background:rgba(255,255,255,.85);
+  backdrop-filter:saturate(160%) blur(6px);
+  -webkit-backdrop-filter:saturate(160%) blur(6px);
+  font-weight:600; color:#374151; white-space:nowrap;
+}
+@media (prefers-color-scheme: dark){
+  .tt-titlebar .tt-user{
+    background:rgba(11,15,25,.82); border-color:#1f2937; color:#e5e7eb;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 
 
