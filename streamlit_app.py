@@ -1692,17 +1692,13 @@ def show_flash_if_any():
 def currency_input(label: str, key: str, value: float = 0.0,
                    help: str | None = None, in_form: bool = False, live: bool = True) -> float:
     """
-    Campo de moneda con formato en vivo:
-      - separador de miles: '.'
-      - separador decimal: ','
-      - hasta 2 decimales (opcionales)
-    Escribes solo dígitos (p. ej. 65500) y se muestra 65.500.
+    Campo moneda: miles '.' y decimales ',' (0–2). Escribes 65500 -> muestra 65.500.
     """
     state_key = f"{key}_txt"
 
-    # ---------- helpers ----------
-    def _group_dots(digits: str) -> str:
-        d = re.sub(r"\D", "", digits or "")
+    # --- helpers ---
+    def _group_dots(d: str) -> str:
+        d = re.sub(r"\D", "", d or "")
         d = d.lstrip("0") or "0"
         out = []
         while d:
@@ -1711,8 +1707,8 @@ def currency_input(label: str, key: str, value: float = 0.0,
         return ".".join(out)
 
     def _fmt_from_number(n: float) -> str:
-        neg = n < 0
-        n = abs(float(n or 0.0))
+        neg = float(n or 0) < 0
+        n = abs(float(n or 0))
         ent = int(n)
         dec = int(round((n - ent) * 100))
         txt = _group_dots(str(ent))
@@ -1723,44 +1719,41 @@ def currency_input(label: str, key: str, value: float = 0.0,
         return txt
 
     def _normalize_text(s: str) -> str:
-        """Normaliza cualquier entrada a nuestro formato: miles '.' y decimales ',' (0–2)."""
         s = str(s or "").strip().replace(" ", "")
         neg = s.startswith("-") or s.startswith("−") or (s.startswith("(") and s.endswith(")"))
         s = s.strip("()").lstrip("-−")
-
-        # Acepta dígitos y coma; ignora puntos del usuario (los pondremos nosotros).
-        s = re.sub(r"[^0-9,]", "", s)
-        # Deja solo la primera coma
+        s = s.replace(".", "")                       # los puntos del usuario se ignoran
+        # deja solo la primera coma
         if s.count(",") > 1:
-            i = s.find(",")
-            s = s[:i+1] + s[i+1:].replace(",", "")
-
+            i = s.find(","); s = s[:i+1] + s[i+1:].replace(",", "")
         if "," in s:
             ent, dec = s.split(",", 1)
             ent = re.sub(r"\D", "", ent)
-            dec = re.sub(r"\D", "", dec)[:2]  # máx. 2 decimales
+            dec = re.sub(r"\D", "", dec)[:2]
             txt = (_group_dots(ent) if ent else "0") + ("," + dec if dec else "")
         else:
             ent = re.sub(r"\D", "", s)
             txt = _group_dots(ent) if ent else "0"
-
         if neg and txt != "0":
             txt = "-" + txt
         return txt
 
-    # ---------- preparar valor inicial ----------
+    # inicialización previa al widget
     if state_key not in st.session_state:
         st.session_state[state_key] = _fmt_from_number(value)
     else:
-        raw = st.session_state.get(state_key, "")
-        norm = _normalize_text(raw)
-        if norm != raw:
-            st.session_state[state_key] = norm  # aún no se creó el widget
+        norm0 = _normalize_text(st.session_state.get(state_key, ""))
+        if norm0 != st.session_state[state_key]:
+            st.session_state[state_key] = norm0
 
-    # ---------- widget ----------
-    st.text_input(label, key=state_key, help=help)
+    # --- callback: asegura normalización justo antes del submit/blur/enter ---
+    def _cb_norm():
+        st.session_state[state_key] = _normalize_text(st.session_state.get(state_key, ""))
 
-    # ---------- JS: formateo en vivo mientras se escribe ----------
+    # widget
+    st.text_input(label, key=state_key, help=help, on_change=_cb_norm)
+
+    # --- JS: formateo en vivo + fuerza sync al presionar Enter ---
     if live:
         import json
         components.html(f"""
@@ -1771,43 +1764,39 @@ def currency_input(label: str, key: str, value: float = 0.0,
             const LABEL={json.dumps(label)};
             const STATE={json.dumps(state_key)};
 
-            function groupDots(d) {{
+            function groupDots(d){{
               d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
               let out='', c=0;
-              for (let i=d.length-1; i>=0; --i) {{
-                out = d[i] + out;
-                if (++c % 3 === 0 && i > 0) out = '.' + out;
-              }}
+              for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0 && i>0) out='.'+out; }}
               return out;
             }}
-
             function normalize(s){{
               s=(s||'').replace(/\\s+/g,'');
               const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'');
-              s=s.replace(/\\./g,'');                 // ignora puntos del usuario
-              // deja solo la primera coma
-              const first = s.indexOf(',');
-              if (first !== -1) s = s.slice(0, first+1) + s.slice(first+1).replace(/,/g,'');
+              s=s.replace(/\\./g,'');
+              const first=s.indexOf(',');
+              if(first!==-1) s=s.slice(0,first+1)+s.slice(first+1).replace(/,/g,'');
               let ent=s, dec='';
-              if (first !== -1) {{ ent = s.slice(0, first); dec = s.slice(first+1).replace(/\\D/g,'').slice(0,2); }}
-              ent = ent.replace(/\\D/g,'');
-              let out = (ent ? groupDots(ent) : '0') + (dec ? (','+dec) : '');
-              if (neg && out !== '0') out = '-' + out;
+              if(first!==-1){{ ent=s.slice(0,first); dec=s.slice(first+1).replace(/\\D/g,'').slice(0,2); }}
+              ent=ent.replace(/\\D/g,'');
+              let out=(ent?groupDots(ent):'0')+(dec?(','+dec):'');
+              if(neg && out!=='0') out='-'+out;
               return out;
             }}
-
             function install(el){{
               if(!el || el.dataset.ttMoneyInstalled===STATE) return;
               el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
-              const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value) {{
-                const a=(doc.activeElement===el); el.value=v; if(a) el.setSelectionRange(el.value.length, el.value.length);
-              }}}};
+              const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value) el.value=v; }};
               el.addEventListener('input', ()=>setTimeout(fmt,0));
+              // Al presionar Enter, normaliza y dispara 'input' para que Streamlit reciba el valor formateado
+              el.addEventListener('keydown', (e)=>{{
+                if(e.key==='Enter'){{ const v=normalize(el.value); if(v!==el.value){{ el.value=v; el.dispatchEvent(new Event('input',{{bubbles:true}})); }} }}
+              }});
               setTimeout(fmt,0);
             }}
-
             let tries=0, t=setInterval(()=>{{
-              const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
+              const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')]
+                        .find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
               if(el){{ clearInterval(t); install(el); }}
               else if(++tries>40) clearInterval(t);
             }},80);
@@ -1816,8 +1805,7 @@ def currency_input(label: str, key: str, value: float = 0.0,
         </script>
         """, height=0, width=0)
 
-    # ---------- valor numérico ----------
-    # Si ya tienes _parse_pesos, úsalo. Si no, descomenta la línea siguiente.
+    # devuelve el float robusto con tu parser
     # def _parse_pesos(s: str) -> float: return float((s or "0").replace(".","").replace(",", "."))
     return float(_parse_pesos(st.session_state[state_key]))
 
