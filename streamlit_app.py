@@ -3968,12 +3968,14 @@ elif show("💸 Gastos"):
 # Préstamos
 # ---------------------------------------------------------
 elif show("🤝 Préstamos"):
-    with st.form(key="PRE_form",clear_on_submit=True):
+    # ---- Alta con form (igual que el tuyo) ----
+    with st.form(key="PRE_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
         PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
         with c2:
-            PRE_valor  = currency_input("Valor", key="PRE_valor", value=0.0, in_form=True)
+            PRE_valor = currency_input("Valor", key="PRE_valor", value=0.0, in_form=True)
         PRE_submit = st.form_submit_button("💾 Guardar préstamo")
+
     if PRE_submit:
         insert_prestamo({'nombre': PRE_nombre, 'valor': float(PRE_valor)})
         finish_and_refresh("Préstamo guardado", ["prestamos"])
@@ -3981,12 +3983,15 @@ elif show("🤝 Préstamos"):
     st.divider()
     p = read_prestamos()
     if not p.empty:
+        # ---- Totales + tabla de vista ----
         st.metric("TOTAL PRÉSTAMOS", money(float(p['valor'].sum())))
         p_show = p.sort_values('id', ascending=False).copy()
         p_show = df_format_money(p_show, ['valor'])
         st.dataframe(p_show, use_container_width=True)
 
-    # === PRÉSTAMOS: edición/borrado en línea ===
+        # =========================================================
+        # === PRÉSTAMOS: edición/borrado en línea (tu bloque) ===
+        # =========================================================
         pp = p.sort_values('id', ascending=False).copy()
         p_editor = pp[['id','nombre','valor']].copy()
         p_editor['🗑️ Eliminar'] = False
@@ -4030,6 +4035,38 @@ elif show("🤝 Préstamos"):
                 finish_and_refresh(f"Eliminados {len(ids)} préstamos.", ["prestamos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
+
+        st.divider()
+
+        # ===============================================
+        # === NUEVO: Acciones por fila → Eliminar rápido
+        # ===============================================
+        st.markdown("#### Acciones por fila (eliminar uno)")
+
+        # Para no saturar el DOM, limita cuántas filas muestran acciones
+        lim = st.number_input("Máx. filas con acciones", 5, 200, value=50, step=5, key="pre_row_actions_lim")
+        p_act = p.sort_values("id", ascending=False).head(int(lim))
+
+        for _, r in p_act.iterrows():
+            rid = int(r["id"])
+            nombre = str(r["nombre"])
+            val = float(_nz(r["valor"]))
+
+            cL, cR = st.columns([7, 1], gap="small")
+            with cL:
+                st.caption(f"**#{rid}** · {nombre} · {money(val)}")
+
+            with cR:
+                with st.popover(f"⋯  #{rid}", use_container_width=True):
+                    st.markdown(f"**Préstamo #{rid}**")
+                    st.caption("Cuando el préstamo esté pagado, puedes eliminar el registro.")
+                    conf = st.checkbox("Confirmar eliminación", key=f"pre_conf_{rid}")
+                    if st.button("🗑️ Eliminar", disabled=not conf, key=f"pre_del_{rid}"):
+                        delete_prestamo_id(rid)  # respeta owner/admin
+                        finish_and_refresh(f"Préstamo #{rid} eliminado.", ["prestamos"])
+
+    else:
+        st.info("No hay préstamos registrados.")
 
 # ---------------------------------------------------------
 # Inventario
