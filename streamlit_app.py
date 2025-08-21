@@ -1692,127 +1692,133 @@ def show_flash_if_any():
 def currency_input(label: str, key: str, value: float = 0.0,
                    help: str | None = None, in_form: bool = False, live: bool = True) -> float:
     """
-    Campo de moneda con formato en vivo (miles '.' y decimales ',').
-    Máximo 2 decimales. Si no hay decimales, no los muestra.
+    Campo de moneda con formato en vivo:
+      - separador de miles: '.'
+      - separador decimal: ','
+      - hasta 2 decimales (opcionales)
+    Escribes solo dígitos (p. ej. 65500) y se muestra 65.500.
     """
     state_key = f"{key}_txt"
 
-    # ---- helpers ----
+    # ---------- helpers ----------
     def _group_dots(digits: str) -> str:
-        digits = (digits or "").lstrip("0") or "0"
+        d = re.sub(r"\D", "", digits or "")
+        d = d.lstrip("0") or "0"
         out = []
-        for i, ch in enumerate(reversed(digits), 1):
-            out.append(ch)
-            if i % 3 == 0 and i < len(digits):
-                out.append(".")
-        return "".join(reversed(out))
+        while d:
+            out.insert(0, d[-3:])
+            d = d[:-3]
+        return ".".join(out)
 
-    def _normalize_text(s: str) -> str:
-        if not isinstance(s, str):
-            s = str(s or "")
-        s = s.strip().replace(" ", "")
-        neg = s.startswith("-") or s.startswith("−") or (s.startswith("(") and s.endswith(")"))
-        s2 = s.strip("()").lstrip("-−")
-        dots, commas = s2.count("."), s2.count(",")
-        ld, lc = s2.rfind("."), s2.rfind(",")
-
-        head, frac = "", ""
-        if dots or commas:
-            sep = "." if (ld > lc) else ","
-            parts = s2.split(sep)
-            tail_digits = re.sub(r"\D", "", parts[-1] if parts else "")
-            sep_count = dots if sep == "." else commas
-            if sep_count > 1 and len(tail_digits) == 3:
-                head = re.sub(r"\D", "", s2)
-            elif 1 <= len(tail_digits) <= 2:
-                head = re.sub(r"\D", "", "".join(parts[:-1]))
-                frac = tail_digits[:2]
-            else:
-                head = re.sub(r"\D", "", s2)
-        else:
-            head = re.sub(r"\D", "", s2)
-
-        txt = _group_dots(head) + ("," + frac if frac else "")
+    def _fmt_from_number(n: float) -> str:
+        neg = n < 0
+        n = abs(float(n or 0.0))
+        ent = int(n)
+        dec = int(round((n - ent) * 100))
+        txt = _group_dots(str(ent))
+        if dec:
+            txt += "," + f"{dec:02d}"
         if neg and txt != "0":
             txt = "-" + txt
         return txt
 
-    # ---- preparar valor en session_state ANTES de crear el widget ----
-    if state_key not in st.session_state:
-        try:
-            init = int(round(float(value or 0.0)))
-        except Exception:
-            init = 0
-        st.session_state[state_key] = f"{init:,}".replace(",", ".")
-    else:
-        raw0 = st.session_state.get(state_key, "")
-        norm0 = _normalize_text(str(raw0))
-        if norm0 != raw0:
-            st.session_state[state_key] = norm0  # OK: aún no hemos creado el widget
+    def _normalize_text(s: str) -> str:
+        """Normaliza cualquier entrada a nuestro formato: miles '.' y decimales ',' (0–2)."""
+        s = str(s or "").strip().replace(" ", "")
+        neg = s.startswith("-") or s.startswith("−") or (s.startswith("(") and s.endswith(")"))
+        s = s.strip("()").lstrip("-−")
 
-    # ---- widget (no escribas en session_state después de esto) ----
+        # Acepta dígitos y coma; ignora puntos del usuario (los pondremos nosotros).
+        s = re.sub(r"[^0-9,]", "", s)
+        # Deja solo la primera coma
+        if s.count(",") > 1:
+            i = s.find(",")
+            s = s[:i+1] + s[i+1:].replace(",", "")
+
+        if "," in s:
+            ent, dec = s.split(",", 1)
+            ent = re.sub(r"\D", "", ent)
+            dec = re.sub(r"\D", "", dec)[:2]  # máx. 2 decimales
+            txt = (_group_dots(ent) if ent else "0") + ("," + dec if dec else "")
+        else:
+            ent = re.sub(r"\D", "", s)
+            txt = _group_dots(ent) if ent else "0"
+
+        if neg and txt != "0":
+            txt = "-" + txt
+        return txt
+
+    # ---------- preparar valor inicial ----------
+    if state_key not in st.session_state:
+        st.session_state[state_key] = _fmt_from_number(value)
+    else:
+        raw = st.session_state.get(state_key, "")
+        norm = _normalize_text(raw)
+        if norm != raw:
+            st.session_state[state_key] = norm  # aún no se creó el widget
+
+    # ---------- widget ----------
     st.text_input(label, key=state_key, help=help)
 
-    # ---- JS opcional para formateo en vivo mientras se teclea ----
+    # ---------- JS: formateo en vivo mientras se escribe ----------
     if live:
         import json
         components.html(f"""
         <script>
         (function(){{
-        try{{
+          try{{
             const doc=(window.parent||window).document;
             const LABEL={json.dumps(label)};
             const STATE={json.dumps(state_key)};
-            function groupDots(d){{ d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
-            let out='', c=0; for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0&&i>0) out='.'+out; }} return out; }}
-            function normalize(s){{
-            s=(s||'').replace(/\\s+/g,'');
-            const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'');
-            const dots=(s.match(/\\./g)||[]).length, commas=(s.match(/,/g)||[]).length;
-            const ld=s.lastIndexOf('.'), lc=s.lastIndexOf(',');
-            let head='', frac='';
-            if(dots || commas){{
-                const sep   = (ld > lc) ? '.' : ',';
-                const parts = s.split(sep);
-                const tail  = (parts[parts.length-1]||'').replace(/\\D/g,'');
-                const sc    = (sep === '.') ? dots : commas;
-                const oneKind = ((dots > 0 && commas === 0) || (commas > 0 && dots === 0));
 
-                // Solo un tipo de separador y: aparece >1 vez o la "cola" tiene ≥3 dígitos
-                // => tratar como separadores de miles (sin decimales)
-                if(oneKind && (sc > 1 || tail.length >= 3)){{
-                head = s.replace(/\\D/g,'');
-                frac = '';
-                }} else if(tail.length >= 1 && tail.length <= 2){{
-                head = parts.slice(0,-1).join('').replace(/\\D/g,'');
-                frac = tail.slice(0,2);
-                }} else {{
-                head = s.replace(/\\D/g,'');
-                frac = '';
-                }}
-            }} else {{
-                head = s.replace(/\\D/g,'');
+            function groupDots(d) {{
+              d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
+              let out='', c=0;
+              for (let i=d.length-1; i>=0; --i) {{
+                out = d[i] + out;
+                if (++c % 3 === 0 && i > 0) out = '.' + out;
+              }}
+              return out;
             }}
-            let out = groupDots(head) + (frac ? (','+frac) : '');
-            if(neg && out!=='0') out='-'+out;
-            return out;
+
+            function normalize(s){{
+              s=(s||'').replace(/\\s+/g,'');
+              const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'');
+              s=s.replace(/\\./g,'');                 // ignora puntos del usuario
+              // deja solo la primera coma
+              const first = s.indexOf(',');
+              if (first !== -1) s = s.slice(0, first+1) + s.slice(first+1).replace(/,/g,'');
+              let ent=s, dec='';
+              if (first !== -1) {{ ent = s.slice(0, first); dec = s.slice(first+1).replace(/\\D/g,'').slice(0,2); }}
+              ent = ent.replace(/\\D/g,'');
+              let out = (ent ? groupDots(ent) : '0') + (dec ? (','+dec) : '');
+              if (neg && out !== '0') out = '-' + out;
+              return out;
             }}
+
             function install(el){{
-            if(!el || el.dataset.ttMoneyInstalled===STATE) return;
-            el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
-            const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value){{ const a=(doc.activeElement===el); el.value=v; if(a) el.setSelectionRange(el.value.length, el.value.length); }} }};
-            el.addEventListener('input', ()=>setTimeout(fmt,0)); setTimeout(fmt,0);
+              if(!el || el.dataset.ttMoneyInstalled===STATE) return;
+              el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
+              const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value) {{
+                const a=(doc.activeElement===el); el.value=v; if(a) el.setSelectionRange(el.value.length, el.value.length);
+              }}}};
+              el.addEventListener('input', ()=>setTimeout(fmt,0));
+              setTimeout(fmt,0);
             }}
+
             let tries=0, t=setInterval(()=>{{
-            const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
-            if(el){{ clearInterval(t); install(el); }} else if(++tries>40) clearInterval(t);
+              const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
+              if(el){{ clearInterval(t); install(el); }}
+              else if(++tries>40) clearInterval(t);
             }},80);
-        }}catch(e){{}}
+          }}catch(e){{}}
         }})();
         </script>
         """, height=0, width=0)
 
-    # ---- devuelve el float robusto usando tu parser ----
+    # ---------- valor numérico ----------
+    # Si ya tienes _parse_pesos, úsalo. Si no, descomenta la línea siguiente.
+    # def _parse_pesos(s: str) -> float: return float((s or "0").replace(".","").replace(",", "."))
     return float(_parse_pesos(st.session_state[state_key]))
 
 def df_format_money(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
