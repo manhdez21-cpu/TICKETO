@@ -1763,9 +1763,6 @@ def currency_input(label: str, key: str, value: float = 0.0,
         # fuera de form sí podemos usar on_change
         st.text_input(label, key=state_key, help=help, on_change=_cb_norm)
 
-    # widget
-    st.text_input(label, key=state_key, help=help, on_change=_cb_norm)
-
     # --- JS: formateo en vivo + fuerza sync al presionar Enter ---
     if live:
         import json
@@ -4018,19 +4015,18 @@ elif show("💸 Gastos"):
 # Préstamos
 # ---------------------------------------------------------
 elif show("🤝 Préstamos"):
-    # ---- Alta con form (igual que el tuyo) ----
-    with st.form(key="PRE_form", clear_on_submit=True):
-        PRE_nombre = st.text_input("Nombre", key="PRE_nombre")
-        PRE_valor  = currency_input("Valor", key="PRE_valor", value=0.0, in_form=True)
-        PRE_submit = st.form_submit_button("💾 Guardar préstamo")
+    # ---- Alta con form ----
+    with st.form("PRE_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
-        PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
+        with c1:
+            PRE_nombre = st.text_input("Nombre", key="PRE_nombre")
         with c2:
             PRE_valor = currency_input("Valor", key="PRE_valor", value=0.0, in_form=True)
-        PRE_submit = st.form_submit_button("💾 Guardar préstamo")
+
+        PRE_submit = st.form_submit_button("💾 Guardar préstamo", use_container_width=True)
 
     if PRE_submit:
-        insert_prestamo({'nombre': PRE_nombre, 'valor': float(PRE_valor)})
+        insert_prestamo({"nombre": PRE_nombre, "valor": float(PRE_valor)})
         finish_and_refresh("Préstamo guardado", ["prestamos"])
 
     st.divider()
