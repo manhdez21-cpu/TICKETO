@@ -485,6 +485,13 @@ def _clear_session():
     st.session_state.pop("auth_user", None)
     st.session_state.pop("auth_role", None)
 
+def logout_and_refresh():
+    _clear_session()            # borra cookie + session_state
+    # (opcional) mensaje para el próximo run
+    flash_next_run("Sesión cerrada 👋", "👋")
+    st.cache_data.clear()
+    st.rerun()                  # ← fuerza el rerun inmediato
+
 def current_user() -> tuple[str | None, str | None]:
     """Devuelve (usuario, rol). Si la cookie vieja no trae rol, aplica fallback por nombre."""
     u = st.session_state.get("auth_user")
@@ -4272,6 +4279,9 @@ elif show("⚙️ Mi Cuenta"):
     if c3.button("💾 Copia de seguridad local (sqlite)", use_container_width=True):
         p = make_db_backup(); set_meta("LAST_BACKUP_ISO", datetime.now().isoformat(timespec="seconds"))
         finish_and_refresh(f"Backup creado: {p}")
+    if st.button("🚪 Cerrar sesión", use_container_width=True, key="btn_logout"):
+        _clear_session()
+        finish_and_refresh("Sesión cerrada 👋")  # esto ya limpia caches y hace rerun
 
     st.markdown("---")
     with st.form("SELF_pw_form2", clear_on_submit=True):
