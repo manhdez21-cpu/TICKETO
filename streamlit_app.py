@@ -1261,13 +1261,37 @@ def _to_date_str(v):
         return None
 
 def _to_float(v) -> float:
+    # Numéricos ya vienen OK
     try:
-        x = float(v)
-        if np.isnan(x):
-            return 0.0
-        return x
+        import numpy as np
     except Exception:
+        class np:  # fallback minúsculo
+            floating = float
+            integer = int
+            def isnan(x): return False
+
+    if v is None:
         return 0.0
+    if isinstance(v, (int, float, np.integer, np.floating)):
+        try:
+            x = float(v)
+            return 0.0 if (hasattr(np, "isnan") and np.isnan(x)) else x
+        except Exception:
+            return 0.0
+
+    # Cadenas: usa el parser que entiende puntos de miles y coma decimal
+    s = str(v).strip()
+    if not s:
+        return 0.0
+    try:
+        # 👇 tu parser robusto declarado arriba en el archivo
+        return _parse_pesos(s)
+    except Exception:
+        # último intento: normaliza coma decimal
+        try:
+            return float(s.replace(",", "."))
+        except Exception:
+            return 0.0
 
 def _to_int(v) -> int:
     try:
