@@ -1750,6 +1750,19 @@ def currency_input(label: str, key: str, value: float = 0.0,
     def _cb_norm():
         st.session_state[state_key] = _normalize_text(st.session_state.get(state_key, ""))
 
+    # --- widget ---
+    # si está dentro de un form, NO pasar on_change
+    if in_form:
+        st.text_input(label, key=state_key, help=help)
+        # normaliza inmediatamente (sin callback)
+        raw = st.session_state.get(state_key, "")
+        norm = _normalize_text(raw)
+        if norm != raw:
+            st.session_state[state_key] = norm
+    else:
+        # fuera de form sí podemos usar on_change
+        st.text_input(label, key=state_key, help=help, on_change=_cb_norm)
+
     # widget
     st.text_input(label, key=state_key, help=help, on_change=_cb_norm)
 
@@ -4007,6 +4020,9 @@ elif show("💸 Gastos"):
 elif show("🤝 Préstamos"):
     # ---- Alta con form (igual que el tuyo) ----
     with st.form(key="PRE_form", clear_on_submit=True):
+        PRE_nombre = st.text_input("Nombre", key="PRE_nombre")
+        PRE_valor  = currency_input("Valor", key="PRE_valor", value=0.0, in_form=True)
+        PRE_submit = st.form_submit_button("💾 Guardar préstamo")
         c1, c2 = st.columns(2, gap="small")
         PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
         with c2:
