@@ -358,7 +358,7 @@ if APP_SECRET == "cambia_esta_clave_larga_y_unica" and not ALLOW_DEFAULT_SECRET:
     st.stop()
 
 SESSION_COOKIE = "finz_sess"
-
+LOGOUT_SENTINEL = "__force_logout"
 COOKIE_SECURE_FLAG = str(cfg("COOKIE_SECURE", "1")).strip() == "1"
 DEV_DEMO = str(cfg("DEV_DEMO_USERS", "0")).strip() == "1"
 
@@ -3458,8 +3458,6 @@ show_flash_if_any()
 
 def show(section: str) -> bool:
     return current == section
-
-LOGOUT_SENTINEL = "__force_logout"
 
 # ---------------------------------------------------------
 # Diario consolidado
