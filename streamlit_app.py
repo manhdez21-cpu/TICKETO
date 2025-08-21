@@ -1692,38 +1692,34 @@ def show_flash_if_any():
 def currency_input(label: str, key: str, value: float = 0.0,
                    help: str | None = None, in_form: bool = False, live: bool = True) -> float:
     """
-    Campo moneda: miles '.' y decimales ',' (0–2). Escribes 65500 -> muestra 65.500.
+    Campo moneda: miles '.' y decimales ',' (0–2).
+    En formularios (`in_form=True`) NO escribe en session_state (solo lee).
     """
     state_key = f"{key}_txt"
 
     # --- helpers ---
+    import re, json
     def _group_dots(d: str) -> str:
         d = re.sub(r"\D", "", d or "")
         d = d.lstrip("0") or "0"
         out = []
         while d:
-            out.insert(0, d[-3:])
-            d = d[:-3]
+            out.insert(0, d[-3:]); d = d[:-3]
         return ".".join(out)
 
     def _fmt_from_number(n: float) -> str:
-        neg = float(n or 0) < 0
-        n = abs(float(n or 0))
-        ent = int(n)
-        dec = int(round((n - ent) * 100))
+        n = float(n or 0)
+        neg = n < 0; n = abs(n)
+        ent = int(n); dec = int(round((n - ent) * 100))
         txt = _group_dots(str(ent))
-        if dec:
-            txt += "," + f"{dec:02d}"
-        if neg and txt != "0":
-            txt = "-" + txt
+        if dec: txt += "," + f"{dec:02d}"
+        if neg and txt != "0": txt = "-" + txt
         return txt
 
     def _normalize_text(s: str) -> str:
         s = str(s or "").strip().replace(" ", "")
         neg = s.startswith("-") or s.startswith("−") or (s.startswith("(") and s.endswith(")"))
-        s = s.strip("()").lstrip("-−")
-        s = s.replace(".", "")                       # los puntos del usuario se ignoran
-        # deja solo la primera coma
+        s = s.strip("()").lstrip("-−").replace(".", "")
         if s.count(",") > 1:
             i = s.find(","); s = s[:i+1] + s[i+1:].replace(",", "")
         if "," in s:
@@ -1734,90 +1730,79 @@ def currency_input(label: str, key: str, value: float = 0.0,
         else:
             ent = re.sub(r"\D", "", s)
             txt = _group_dots(ent) if ent else "0"
-        if neg and txt != "0":
-            txt = "-" + txt
+        if neg and txt != "0": txt = "-" + txt
         return txt
 
-    # inicialización previa al widget
-    if state_key not in st.session_state:
-        st.session_state[state_key] = _fmt_from_number(value)
-    else:
-        norm0 = _normalize_text(st.session_state.get(state_key, ""))
-        if norm0 != st.session_state[state_key]:
-            st.session_state[state_key] = norm0
-
-    # --- callback: asegura normalización justo antes del submit/blur/enter ---
-    def _cb_norm():
-        st.session_state[state_key] = _normalize_text(st.session_state.get(state_key, ""))
-
-    # --- widget ---
-    # si está dentro de un form, NO pasar on_change
+    # ---- RENDER ----
     if in_form:
-        st.text_input(label, key=state_key, help=help)
-        # normaliza inmediatamente (sin callback)
-        raw = st.session_state.get(state_key, "")
-        norm = _normalize_text(raw)
-        if norm != raw:
-            st.session_state[state_key] = norm
+        # ❗ En formularios: no tocar session_state.
+        seed = st.session_state.get(state_key, _fmt_from_number(value))
+        txt = st.text_input(label, value=seed, key=state_key, help=help)
     else:
-        # fuera de form sí podemos usar on_change
+        # Fuera de forms sí podemos normalizar y escribir en session_state
+        if state_key not in st.session_state:
+            st.session_state[state_key] = _fmt_from_number(value)
+        else:
+            norm0 = _normalize_text(st.session_state.get(state_key, ""))
+            if norm0 != st.session_state[state_key]:
+                st.session_state[state_key] = norm0
+
+        def _cb_norm():
+            st.session_state[state_key] = _normalize_text(st.session_state.get(state_key, ""))
+
         st.text_input(label, key=state_key, help=help, on_change=_cb_norm)
 
-    # --- JS: formateo en vivo + fuerza sync al presionar Enter ---
+    # JS de formateo en vivo (no escribe directamente en session_state)
     if live:
-        import json
         components.html(f"""
-        <script>
-        (function(){{
+        <script>(function(){{
           try{{
             const doc=(window.parent||window).document;
-            const LABEL={json.dumps(label)};
-            const STATE={json.dumps(state_key)};
-
-            function groupDots(d){{
-              d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
-              let out='', c=0;
-              for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0 && i>0) out='.'+out; }}
-              return out;
-            }}
+            const LABEL={json.dumps(label)}; const STATE={json.dumps(state_key)};
+            function groupDots(d){{ d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
+              let out='',c=0; for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0&&i>0) out='.'+out; }} return out;}}
             function normalize(s){{
               s=(s||'').replace(/\\s+/g,'');
-              const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'');
-              s=s.replace(/\\./g,'');
-              const first=s.indexOf(',');
-              if(first!==-1) s=s.slice(0,first+1)+s.slice(first+1).replace(/,/g,'');
-              let ent=s, dec='';
-              if(first!==-1){{ ent=s.slice(0,first); dec=s.slice(first+1).replace(/\\D/g,'').slice(0,2); }}
-              ent=ent.replace(/\\D/g,'');
-              let out=(ent?groupDots(ent):'0')+(dec?(','+dec):'');
-              if(neg && out!=='0') out='-'+out;
-              return out;
+              const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'').replace(/\\./g,'');
+              const i=s.indexOf(','); if(i!==-1) s=s.slice(0,i+1)+s.slice(i+1).replace(/,/g,'');
+              let ent=s,dec=''; if(i!==-1){{ ent=s.slice(0,i); dec=s.slice(i+1).replace(/\\D/g,'').slice(0,2); }}
+              ent=ent.replace(/\\D/g,''); let out=(ent?groupDots(ent):'0')+(dec?(','+dec):''); if(neg&&out!=='0') out='-'+out; return out;
             }}
             function install(el){{
-              if(!el || el.dataset.ttMoneyInstalled===STATE) return;
+              if(!el||el.dataset.ttMoneyInstalled===STATE) return;
               el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
               const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value) el.value=v; }};
               el.addEventListener('input', ()=>setTimeout(fmt,0));
-              // Al presionar Enter, normaliza y dispara 'input' para que Streamlit reciba el valor formateado
-              el.addEventListener('keydown', (e)=>{{
-                if(e.key==='Enter'){{ const v=normalize(el.value); if(v!==el.value){{ el.value=v; el.dispatchEvent(new Event('input',{{bubbles:true}})); }} }}
-              }});
+              el.addEventListener('keydown',(e)=>{{ if(e.key==='Enter'){{ const v=normalize(el.value);
+                if(v!==el.value){{ el.value=v; el.dispatchEvent(new Event('input',{{bubbles:true}})); }} }} }});
               setTimeout(fmt,0);
             }}
-            let tries=0, t=setInterval(()=>{{
-              const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')]
-                        .find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
-              if(el){{ clearInterval(t); install(el); }}
-              else if(++tries>40) clearInterval(t);
+            let tries=0,t=setInterval(()=>{{
+              const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].find(n=>n&&n.dataset.ttMoneyInstalled!==STATE);
+              if(el){{ clearInterval(t); install(el); }} else if(++tries>40) clearInterval(t);
             }},80);
           }}catch(e){{}}
-        }})();
-        </script>
-        """, height=0, width=0)
+        }})()</script>""", height=0, width=0)
 
-    # devuelve el float robusto con tu parser
-    # def _parse_pesos(s: str) -> float: return float((s or "0").replace(".","").replace(",", "."))
-    return float(_parse_pesos(st.session_state[state_key]))
+    # ---- Resultado numérico robusto ----
+    def _parse_pesos(cell) -> float:
+        import numpy as np
+        if cell is None: return 0.0
+        s = str(cell).strip()
+        if not s: return 0.0
+        neg = s.startswith("-") or s.startswith("−") or (s.startswith("(") and s.endswith(")"))
+        s = s.strip("()").lstrip("-−").replace(".", "")
+        if "," in s:
+            ent, dec = s.split(",", 1)
+            ent = re.sub(r"\\D", "", ent); dec = re.sub(r"\\D", "", dec)[:2]
+            val = float(f"{ent or '0'}.{dec or '0'}")
+        else:
+            ent = re.sub(r"\\D", "", s)
+            val = float(ent or 0)
+        return -val if neg else val
+
+    txt_now = st.session_state.get(state_key, _fmt_from_number(value))
+    return float(_parse_pesos(txt_now))
 
 def df_format_money(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     d = df.copy()
