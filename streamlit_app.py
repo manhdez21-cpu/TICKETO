@@ -2855,84 +2855,84 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# st.markdown("""
-# <style>
-# # /* ========= BOTÓN HAMBURGUESA — NARANJA ========= */
-# # [data-testid="stSidebarCollapseControl"] button,
-# # [data-testid="collapsedControl"]{
-# #   width: 46px !important;
-# #   height: 46px !important;
-# #   border-radius: 999px !important;
-# #   background: linear-gradient(135deg,#f97316,#fb923c) !important; /* 🟧 naranja → naranja claro */
-# #   border: 0 !important;
-# #   padding: 0 !important;
-# #   display: flex !important;
-# #   align-items: center !important;
-# #   justify-content: center !important;
-# #   position: relative !important;
-# #   box-shadow: 0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16) !important; /* sombras naranjas */
-# #   transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
-# #   z-index: 2000 !important;
-# #   cursor: pointer;
-# # }
+st.markdown("""
+<style>
+/* ========= BOTÓN HAMBURGUESA — NARANJA ========= */
+[data-testid="stSidebarCollapseControl"] button,
+[data-testid="collapsedControl"]{
+  width: 46px !important;
+  height: 46px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg,#f97316,#fb923c) !important; /* 🟧 naranja → naranja claro */
+  border: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  box-shadow: 0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16) !important; /* sombras naranjas */
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  z-index: 2000 !important;
+  cursor: pointer;
+}
 
-# # /* 3 barras blancas centradas */
-# # [data-testid="stSidebarCollapseControl"] button::before,
-# # [data-testid="collapsedControl"]::before{
-# #   content:"";
-# #   position: absolute;
-# #   top: 50%; left: 50%;
-# #   transform: translate(-50%, -50%);
-# #   width: 22px; height: 2px;
-# #   background:#fff; border-radius: 2px;
-# #   box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
-# # }
+/* 3 barras blancas centradas */
+[data-testid="stSidebarCollapseControl"] button::before,
+[data-testid="collapsedControl"]::before{
+  content:"";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px; height: 2px;
+  background:#fff; border-radius: 2px;
+  box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
+}
 
-# # [data-testid="stSidebarCollapseControl"] button:hover,
-# # [data-testid="collapsedControl"]:hover{
-# #   transform: translateY(-1px) scale(1.04);
-# # }
+[data-testid="stSidebarCollapseControl"] button:hover,
+[data-testid="collapsedControl"]:hover{
+  transform: translateY(-1px) scale(1.04);
+}
 
-# /* Efecto pulse cuando está colapsado — tono naranja */
-# @keyframes tt-pulse {
-#   0%   { box-shadow: 0 0 0 0 rgba(249,115,22,.55); }
-#   70%  { box-shadow: 0 0 0 14px rgba(249,115,22,0); }
-#   100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
-# }
-# [data-testid="collapsedControl"]{
-#   animation: tt-pulse 2.2s ease-out infinite;
-# }
+/* Efecto pulse cuando está colapsado — tono naranja */
+@keyframes tt-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(249,115,22,.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(249,115,22,0); }
+  100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
+}
+[data-testid="collapsedControl"]{
+  animation: tt-pulse 2.2s ease-out infinite;
+}
 
-# /* ========= SIDEBAR MÁS ANGOSTA EN MÓVIL ========= */
-# @media (max-width: 900px){
-#   section[data-testid="stSidebar"]{
-#     width: 232px !important;
-#     min-width: 232px !important;
-#   }
-# #   [data-testid="stSidebarCollapseControl"]{
-# #     top: 8px !important;
-# #     left: 8px !important;
-# #   }
-# # }
-# </style>
-# """, unsafe_allow_html=True)
+/* ========= SIDEBAR MÁS ANGOSTA EN MÓVIL ========= */
+@media (max-width: 900px){
+  section[data-testid="stSidebar"]{
+    width: 232px !important;
+    min-width: 232px !important;
+  }
+  [data-testid="stSidebarCollapseControl"]{
+    top: 8px !important;
+    left: 8px !important;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown("""
 <style>
 /* === FIX FINAL: fuerza que el toggle de la sidebar exista y sea visible === */
 
-# /* Móvil: NO lo ocultes (anula cualquier regla previa que lo esconda) */
-# @media (max-width:900px){
-#   [data-testid*="SidebarCollapse"],
-#   [data-testid*="SidebarCollapse"] *,
-#   [data-testid="stSidebarCollapseControl"],
-#   [data-testid="stSidebarCollapseControl"] *,
-#   [data-testid="collapsedControl"]{
-#     display:flex !important;
-#     visibility:visible !important;
-#     pointer-events:auto !important;
-#     opacity:1 !important;
-#   }
+/* Móvil: NO lo ocultes (anula cualquier regla previa que lo esconda) */
+@media (max-width:900px){
+  [data-testid*="SidebarCollapse"],
+  [data-testid*="SidebarCollapse"] *,
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="stSidebarCollapseControl"] *,
+  [data-testid="collapsedControl"]{
+    display:flex !important;
+    visibility:visible !important;
+    pointer-events:auto !important;
+    opacity:1 !important;
+  }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -2991,115 +2991,115 @@ div[data-testid="stIFrame"]:has(> iframe[height="0"]){
 """, unsafe_allow_html=True)
 
 
-# st.markdown("""
-# <style>
-# # /* EXCEPCIÓN: el botón de abrir/cerrar sidebar SÍ recibe clics */
-# # div[data-testid="stToolbar"] [data-testid*="SidebarCollapse"],
-# # div[data-testid="stToolbar"] [data-testid="stSidebarCollapseControl"]{
-# #   pointer-events: auto !important;
-# # }
-
-# /* 2) Forzar visibilidad/posición de la hamburguesa en todas las vistas */
-# @media (min-width:901px){
-#   [data-testid="stSidebarCollapseControl"],
-#   [data-testid="collapsedControl"]{
-#     position: fixed !important;
-#     top: 12px !important; left: 12px !important;
-#     display: flex !important; visibility: visible !important;
-#     opacity: 1 !important; pointer-events: auto !important;
-#     z-index: 4000 !important;
-#   }
-#   /* Deja espacio en el título para la hamburguesa */
-#   .tt-titlebar{ padding-left:74px !important; }
-# }
-# # @media (max-width:900px){
-# #   [data-testid="stSidebarCollapseControl"],
-# #   [data-testid="collapsedControl"]{
-# #     position: fixed !important;
-# #     top: 8px !important; left: 8px !important;
-# #     display: flex !important; visibility: visible !important;
-# #     opacity: 1 !important; pointer-events: auto !important;
-# #     z-index: 4000 !important;
-# #   }
-# # }
-# </style>
-# """, unsafe_allow_html=True)
-
-# st.markdown("""
-# <style>
-
-# # /* El toolbar NO bloquea clics, salvo excepción para el toggle */
-# # div[data-testid="stToolbar"]{
-# #   position:fixed !important; top:6px !important; right:8px !important;
-# #   left:auto !important; bottom:auto !important;
-# #   display:inline-flex !important; width:auto !important; height:auto !important;
-# #   background:transparent !important; box-shadow:none !important;
-# #   transform:none !important; z-index:1 !important; pointer-events:none !important;
-# # }
-# # div[data-testid="stToolbar"] [data-testid*="SidebarCollapse"]{
-# #   pointer-events:auto !important;
-# # }
-
-# # /* Fuerza visibilidad y saca el control del header para TODAS las variantes */
-# # [data-testid="stSidebarCollapseControl"],
-# # [data-testid="stSidebarCollapseControl"] > button,
-# # [data-testid="collapsedControl"]{
-# #   position:fixed !important;
-# #   top:12px !important; left:12px !important;
-# #   display:flex !important; visibility:visible !important; opacity:1 !important;
-# #   pointer-events:auto !important; z-index:4000 !important;
-# # }
-
-# # /* Estilo opcional (puedes quitarlo si quieres el look nativo) */
-# # [data-testid="stSidebarCollapseControl"],
-# # [data-testid="stSidebarCollapseControl"] > button,
-# # [data-testid="collapsedControl"]{
-# #   width:46px; height:46px; border-radius:999px; border:0;
-# #   background:linear-gradient(135deg,#f97316,#fb923c);
-# #   box-shadow:0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16);
-# # }
-# # [data-testid="stSidebarCollapseControl"] svg,
-# # [data-testid="stSidebarCollapseControl"] > button svg,
-# # [data-testid="collapsedControl"] svg{
-# #   width:22px; height:22px; display:block !important;   /* NO ocultes el SVG */
-# # }
-
-# @media (max-width:900px){
-#   [data-testid="stSidebarCollapseControl"],
-#   [data-testid="stSidebarCollapseControl"] > button,
-#   [data-testid="collapsedControl"]{ top:8px !important; left:8px !important; }
-#   section[data-testid="stSidebar"]{ width:232px !important; min-width:232px !important; }
-# }
-# </style>
-# """, unsafe_allow_html=True)
-
-# st.markdown("""
-# <style id="tt-restore-burger">
-# /* 1) No ocultes el header: vuelve a su altura normal */
-# header[data-testid="stHeader"]{
-#   height:auto !important; min-height:unset !important;
-#   padding:0 !important; border:0 !important; background:transparent !important;
+st.markdown("""
+<style>
+# /* EXCEPCIÓN: el botón de abrir/cerrar sidebar SÍ recibe clics */
+# div[data-testid="stToolbar"] [data-testid*="SidebarCollapse"],
+# div[data-testid="stToolbar"] [data-testid="stSidebarCollapseControl"]{
+#   pointer-events: auto !important;
 # }
 
-# # /* 2) El toolbar vuelve a ser clicable y sin forzado de posición */
-# # div[data-testid="stToolbar"]{
-# #   position:static !important; width:auto !important; height:auto !important;
-# #   transform:none !important; box-shadow:none !important;
-# #   pointer-events:auto !important;
-# # }
+/* 2) Forzar visibilidad/posición de la hamburguesa en todas las vistas */
+@media (min-width:901px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="collapsedControl"]{
+    position: fixed !important;
+    top: 12px !important; left: 12px !important;
+    display: flex !important; visibility: visible !important;
+    opacity: 1 !important; pointer-events: auto !important;
+    z-index: 4000 !important;
+  }
+  /* Deja espacio en el título para la hamburguesa */
+  .tt-titlebar{ padding-left:74px !important; }
+}
+@media (max-width:900px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="collapsedControl"]{
+    position: fixed !important;
+    top: 8px !important; left: 8px !important;
+    display: flex !important; visibility: visible !important;
+    opacity: 1 !important; pointer-events: auto !important;
+    z-index: 4000 !important;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
 
-# # /* 3) Muestra y coloca SIEMPRE el toggle de la sidebar (hamburguesa) */
-# # [data-testid="stSidebarCollapseControl"],
-# # [data-testid="collapsedControl"],
-# # [data-testid="stSidebarCollapseControl"] > button{
-# #   display:flex !important; visibility:visible !important; opacity:1 !important;
-# #   pointer-events:auto !important;
-# #   position:fixed !important; top:12px !important; left:12px !important;
-# #   z-index:5000 !important;
-# # }
+st.markdown("""
+<style>
 
-# </style>
-# """, unsafe_allow_html=True)
+# /* El toolbar NO bloquea clics, salvo excepción para el toggle */
+# div[data-testid="stToolbar"]{
+#   position:fixed !important; top:6px !important; right:8px !important;
+#   left:auto !important; bottom:auto !important;
+#   display:inline-flex !important; width:auto !important; height:auto !important;
+#   background:transparent !important; box-shadow:none !important;
+#   transform:none !important; z-index:1 !important; pointer-events:none !important;
+# }
+# div[data-testid="stToolbar"] [data-testid*="SidebarCollapse"]{
+#   pointer-events:auto !important;
+# }
+
+/* Fuerza visibilidad y saca el control del header para TODAS las variantes */
+[data-testid="stSidebarCollapseControl"],
+[data-testid="stSidebarCollapseControl"] > button,
+[data-testid="collapsedControl"]{
+  position:fixed !important;
+  top:12px !important; left:12px !important;
+  display:flex !important; visibility:visible !important; opacity:1 !important;
+  pointer-events:auto !important; z-index:4000 !important;
+}
+
+/* Estilo opcional (puedes quitarlo si quieres el look nativo) */
+[data-testid="stSidebarCollapseControl"],
+[data-testid="stSidebarCollapseControl"] > button,
+[data-testid="collapsedControl"]{
+  width:46px; height:46px; border-radius:999px; border:0;
+  background:linear-gradient(135deg,#f97316,#fb923c);
+  box-shadow:0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16);
+}
+[data-testid="stSidebarCollapseControl"] svg,
+[data-testid="stSidebarCollapseControl"] > button svg,
+[data-testid="collapsedControl"] svg{
+  width:22px; height:22px; display:block !important;   /* NO ocultes el SVG */
+}
+
+@media (max-width:900px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="stSidebarCollapseControl"] > button,
+  [data-testid="collapsedControl"]{ top:8px !important; left:8px !important; }
+  section[data-testid="stSidebar"]{ width:232px !important; min-width:232px !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style id="tt-restore-burger">
+/* 1) No ocultes el header: vuelve a su altura normal */
+header[data-testid="stHeader"]{
+  height:auto !important; min-height:unset !important;
+  padding:0 !important; border:0 !important; background:transparent !important;
+}
+
+/* 2) El toolbar vuelve a ser clicable y sin forzado de posición */
+div[data-testid="stToolbar"]{
+  position:static !important; width:auto !important; height:auto !important;
+  transform:none !important; box-shadow:none !important;
+  pointer-events:auto !important;
+}
+
+/* 3) Muestra y coloca SIEMPRE el toggle de la sidebar (hamburguesa) */
+[data-testid="stSidebarCollapseControl"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseControl"] > button{
+  display:flex !important; visibility:visible !important; opacity:1 !important;
+  pointer-events:auto !important;
+  position:fixed !important; top:12px !important; left:12px !important;
+  z-index:5000 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown("""
 <style>
@@ -3343,59 +3343,6 @@ details[data-testid="stExpander"],
 [data-testid="stDataFrame"] table tbody tr:nth-child(odd){
   background: transparent !important;
 }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style id="burger-placement">
-/* --- Reset del toolbar para que no flote ni bloquee clics --- */
-div[data-testid="stToolbar"]{
-  position: static !important;       /* vuelve a su lugar */
-  top:auto !important; right:auto !important; left:auto !important;
-  width:auto !important; height:auto !important;
-  transform:none !important; box-shadow:none !important;
-  pointer-events:auto !important;
-}
-
-/* --- Reposicionar el botón de la sidebar sin tocar el toolbar --- */
-/* Escritorio: abajo-izquierda (lejos de Share) */
-@media (min-width:901px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="stSidebarCollapseControl"] > button,
-  [data-testid="collapsedControl"]{
-    position: fixed !important;
-    top:auto !important; bottom:16px !important;
-    left:16px !important; right:auto !important;
-    z-index: 4000 !important;
-  }
-}
-
-/* Móvil: arriba-izquierda (cámbialo a derecha si prefieres) */
-@media (max-width:900px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="stSidebarCollapseControl"] > button,
-  [data-testid="collapsedControl"]{
-    position: fixed !important;
-    top: max(12px, env(safe-area-inset-top)) !important;
-    left: max(12px, env(safe-area-inset-left)) !important;
-    right:auto !important; bottom:auto !important;
-    z-index: 4000 !important;
-  }
-}
-
-/* Opcional: si lo quieres arriba-DERECHA en móvil, usa esto en lugar del bloque móvil:
-@media (max-width:900px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="stSidebarCollapseControl"] > button,
-  [data-testid="collapsedControl"]{
-    position: fixed !important;
-    top: max(12px, env(safe-area-inset-top)) !important;
-    right: max(12px, env(safe-area-inset-right)) !important;
-    left:auto !important; bottom:auto !important;
-    z-index: 4000 !important;
-  }
-}
-*/
 </style>
 """, unsafe_allow_html=True)
 
