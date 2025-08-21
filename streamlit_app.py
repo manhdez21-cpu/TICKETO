@@ -3927,7 +3927,7 @@ elif show("💸 Gastos"):
 
         c3, c4 = st.columns(2, gap="small")
         with c3:
-            GTO_valor = currency_input("Valor del gasto", key="GTO_valor", value=0.0, in_form=True)
+            GTO_valor = st.number_input("Valor", min_value=0.0, value=0.0, step=100.0, key="GTO_valor")
         with c4:
             GTO_notas = st.text_input("Notas", value="", key="GTO_notas")
 
@@ -4034,7 +4034,7 @@ elif show("🤝 Préstamos"):
         PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
         # IMPORTANTE: in_form=True y etiqueta única para evitar colisiones por aria-label
         with c2:
-            PRE_valor = currency_input("Valor del préstamo", key="PRE_valor", value=0.0, in_form=True)
+            PRE_valor = st.number_input("Valor", min_value=0.0, value=0.0, step=100.0, key="PRE_valor")
 
         PRE_submit = st.form_submit_button("💾 Guardar préstamo", use_container_width=True)
 
@@ -4143,7 +4143,7 @@ elif show("📦 Inventario"):
         c1, c2 = st.columns(2, gap="small")
         INV_prod  = c1.text_input("Producto", key="INV_producto")
         with c2:
-            INV_costo = currency_input("Valor costo", key="INV_valor_costo", value=0.0, in_form=True)
+            INV_costo = st.number_input("Valor costo", min_value=0.0, value=0.0, step=100.0, key="INV_valor_costo")
         INV_submit = st.form_submit_button("💾 Guardar ítem")
     if INV_submit:
         insert_inventario({'producto': INV_prod, 'valor_costo': float(INV_costo)})
