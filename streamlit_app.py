@@ -17,88 +17,26 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-/* Desktop: deja el botón nativo operable y por encima */
-@media (min-width: 901px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="collapsedControl"]{
-    z-index: 2000 !important;
-    pointer-events: auto !important;
-  }
+/* 1) Sin relleno extra arriba, pero sin romper títulos */
+[data-testid="stAppViewContainer"] > .main{ padding-top:0 !important; }
+[data-testid="stAppViewContainer"] > .main .block-container{ padding-top:0 !important; }
+
+/* 2) Recupera un poco de separación entre bloques (antes lo dejé en 0) */
+[data-testid="stVerticalBlock"]{ gap:6px !important; row-gap:6px !important; }
+[data-testid="stHorizontalBlock"]{ column-gap:12px !important; row-gap:6px !important; }
+
+/* 3) Colapsa SOLO wrappers vacíos de utilidades (no toques contenedores con contenido) */
+.block-container > div:has(> style:only-child),
+.block-container > div:has(> iframe[height="0"]:only-child),
+.block-container > div:has(> iframe[style*="height: 0px"]:only-child){
+  margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
 }
 
-/* Móvil: OCULTA por completo el botón nativo -> evita el “botón doble” */
-@media (max-width: 900px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="stSidebarCollapseControl"] *,
-  [data-testid="collapsedControl"]{
-    display:none !important;
-    visibility:hidden !important;
-    pointer-events:none !important;
-  }
-
-  /* Sidebar angosta + animación */
-  section[data-testid='stSidebar']{
-    width: 232px !important;
-    min-width: 232px !important;
-    transform: translateX(-110%);
-    visibility: hidden;
-    transition: transform .25s ease, visibility .25s ease !important;
-    z-index: 2000 !important;
-  }
-  section[data-testid='stSidebar'][data-tt-open='1']{
-    transform: translateX(0) !important;
-    visibility: visible !important;
-  }
-
-  /* Botón hamburguesa naranja flotante */
-  #tt-burger{
-    position: fixed; top: 14px; left: 14px;
-    width: 52px; height: 52px; border:0; border-radius:999px;
-    background: linear-gradient(135deg,#f97316,#f59e0b);
-    box-shadow: 0 10px 24px rgba(0,0,0,.18);
-    cursor: pointer; z-index: 2100;
-  }
-  #tt-burger i{
-    display:block; width:22px; height:3px; background:#fff;
-    border-radius:2px; margin:6px auto 0; box-shadow:0 1px 0 rgba(0,0,0,.08);
-  }
-  #tt-burger i:first-child{ margin-top:14px; }
-
-  /* Overlay cuando la sidebar está abierta */
-  #tt-ov{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999; }
-}
+/* 5) Si algún H1/H2 es el primer hijo, quítale el margen superior del navegador, no su altura */
+.block-container h1:first-child,
+.block-container h2:first-child{ margin-top:0 !important; }
 </style>
 """, unsafe_allow_html=True)
-
-def _close_sidebar_on_mobile():
-    components.html("""
-    <script>
-    (function () {
-      try{
-        if (!window.matchMedia("(max-width: 900px)").matches) return;
-        const doc = window.parent?.document || document;
-
-        // 1) Tocar el overlay (Drawer abierto)
-        const ov = doc.querySelector('[data-testid="stSidebarOverlay"]');
-        if (ov && ov.offsetParent !== null){ ov.click(); return; }
-
-        // 2) Botón de colapso (por si no hay overlay visible)
-        const btn =
-          doc.querySelector('[data-testid="stSidebarCollapseControl"] button') ||
-          doc.querySelector('[data-testid="collapsedControl"]') ||
-          doc.querySelector('[data-testid="stSidebarCollapseControl"]');
-        if (btn){ btn.click(); return; }
-
-        // 3) Fallback: fuerza oculto
-        const sb = doc.querySelector('section[data-testid="stSidebar"]');
-        if (sb){
-          sb.style.transform = 'translateX(-110%)';
-          sb.style.visibility = 'hidden';
-        }
-      }catch(e){}
-    })();
-    </script>
-    """, height=0, width=0)
 
 components.html("""
 <script>
@@ -129,10 +67,6 @@ def _app_sig() -> str:
     except Exception:
         return "nohash"
 
-with st.sidebar:
-    p = Path(__file__).resolve()
-    st.caption(f"🧩 Build: {APP_BUILD}")
-
 st.markdown('<meta name="google" content="notranslate">', unsafe_allow_html=True)
 
 # with st.sidebar:
@@ -142,54 +76,25 @@ st.markdown('<meta name="google" content="notranslate">', unsafe_allow_html=True
 #     st.caption(f"📁 Carpeta: {p.parent}")
 #     st.caption(f"🔑 App sig: {_app_sig()}")
 
-# --- Layout top limpio (quitamos header nativo de Streamlit) ---
+# --- Mantener header nativo (recupera la hamburguesa) ---
 st.markdown("""
 <style>
-/* Mostrar el header nativo (antes estaba display:none) */
-header[data-testid="stHeader"]{
-  display:flex !important;
-  height: 32px; min-height: 32px;
-  padding: 0 !important;
-  background: transparent !important;
-  border-bottom: none !important;
-}
-
-/* Evita que el contenido del header tape cosas */
-header[data-testid="stHeader"] > div { background: transparent !important; box-shadow: none !important; }
-
-/* Nuestro header pegajoso queda por debajo del control de sidebar */
-.tt-sticky{ z-index: 1000 !important; }
+/* No ocultes el header; si molesta la banda de color, solo achícala */
+div[data-testid="stDecoration"]{ height:0 !important; }
 </style>
-""", unsafe_allow_html=True)      
-            
-st.markdown("""
-<style>
-@media (min-width: 901px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="collapsedControl"]{
-    z-index: 2000 !important;
-    pointer-events: auto !important;
-  }
-}
-</style>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True) 
+        
 
 st.markdown("""
 <style>
-/* Recorta el espacio en la parte alta del contenido */
 [data-testid="stAppViewContainer"] > .main .block-container{
-  padding-top: 12px !important;   /* default ~4–6rem */
+  padding-top: 0 !important;
 }
-
-/* En móvil: aún más compacto */
 @media (max-width: 900px){
   [data-testid="stAppViewContainer"] > .main .block-container{
-    padding-top: 6px !important;
+    padding-top: 0 !important;
   }
 }
-
-/* Por si usas mi barra .tt-titlebar, que quede pegada arriba */
-.tt-titlebar{ margin-top: 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -243,6 +148,164 @@ details[data-testid="stExpander"] > summary{ padding:12px 14px; font-weight:700;
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+:root{
+  --card-bg:#ffffff; --card-br:rgba(120,120,135,.16); --text-1:#111827; --text-2:#6b7280;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --card-bg:#0b0f19; --card-br:#1f2937; --text-1:#e5e7eb; --text-2:#9ca3af;
+  }
+}
+
+/* ==== Stat cards elegantes ==== */
+.tt-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+@media (max-width: 1024px){ .tt-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width: 640px){ .tt-grid{ grid-template-columns:1fr; } }
+
+.tt-stat{
+  display:flex; gap:12px; align-items:center;
+  padding:16px 16px; border:1px solid var(--card-br); border-radius:16px;
+  background:var(--card-bg); box-shadow:0 4px 12px rgba(0,0,0,.05);
+}
+.tt-stat .ic{
+  width:44px; height:44px; border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px; color:white; box-shadow:0 8px 18px rgba(0,0,0,.15) inset;
+}
+.tt-stat .meta{ min-width:0 }
+.tt-stat .lbl{
+  font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--text-2); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.tt-stat .val{ font-size:26px; font-weight:800; color:var(--text-1); line-height:1.15; }
+
+/* Paletas para el recuadro del icono */
+.tt-indigo .ic{ background:linear-gradient(135deg,#6366f1,#8b5cf6); }
+.tt-emerald .ic{ background:linear-gradient(135deg,#10b981,#34d399); }
+.tt-rose    .ic{ background:linear-gradient(135deg,#f43f5e,#fb7185); }
+.tt-amber   .ic{ background:linear-gradient(135deg,#f59e0b,#fbbf24); }
+.tt-sky     .ic{ background:linear-gradient(135deg,#0ea5e9,#38bdf8); }
+
+/* Card contenedor (EFECTIVO / TOTAL DE CAPITAL) */
+.tt-card{
+  border:1px solid var(--card-br); border-radius:16px; background:var(--card-bg);
+  padding:16px; box-shadow:0 6px 16px rgba(0,0,0,.05); margin-top:10px;
+}
+.tt-card h4{ margin:0 0 10px 0; font-size:18px; font-weight:800; color:var(--text-1); }
+.tt-callout{
+  border:1px dashed rgba(99,102,241,.35); background:rgba(99,102,241,.06);
+  padding:16px; border-radius:16px; font-weight:800; font-size:26px; margin-top:12px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+:root{
+  /* Paleta de la app */
+  --pri:#6366f1;          /* indigo */
+  --accent:#f97316;       /* naranja */
+  --text:#111827; --muted:#6b7280; --border:rgba(120,120,135,.18); --card:#ffffff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --text:#e5e7eb; --muted:#9ca3af; --border:#1f2937; --card:#0b0f19;
+  }
+}
+
+/* Grid responsivo, limpio */
+.mm-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+@media (max-width:1024px){ .mm-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:640px){  .mm-grid{ grid-template-columns:1fr; } }
+
+/* Tarjeta minimal (sin sombras, sin negrita) */
+.mm-stat{
+  background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:12px 14px; display:flex; flex-direction:column; gap:4px;
+  border-left:4px solid var(--tone, var(--border));
+}
+.mm-stat .lbl{
+  font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--muted); font-weight:400; line-height:1.2;
+}
+.mm-stat .val{
+  font-size:24px; font-weight:400; color:var(--text); line-height:1.15;
+}
+
+/* Contenedor simple tipo “card” para secciones */
+.mm-card{
+  background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:14px; margin-top:10px;
+}
+.mm-card h4{ margin:0 0 8px 0; font-size:16px; font-weight:400; color:var(--muted); }
+
+/* Números “callout” discretos (sin bold) */
+.mm-total{ font-size:26px; font-weight:400; color:var(--text); }
+
+/* Botones mantienen tus estilos; inputs quedan igual */
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* H1 y título pegajoso un poco más livianos (sin negrita fuerte) */
+h1, .tt-titlebar .ttl{ font-weight:600 !important; }
+
+/* Tarjeta minimal: un pelín más compacta y borde izquierdo más fino */
+.mm-stat{
+  padding:10px 12px;
+  border-radius:10px;
+  border-left-width:3px;        /* antes 4px */
+}
+.mm-stat .lbl{
+  font-size:11px;               /* etiqueta más discreta */
+  letter-spacing:.06em;
+}
+.mm-stat .val{
+  font-size:22px;               /* número más sereno */
+}
+
+/* Cards contenedoras ligeramente más suaves */
+.mm-card{ border-radius:12px; }
+
+/* Inputs y botones con la misma altura y radios redondeados */
+.stButton > button{ min-height:42px; border-radius:10px; }
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input{
+  border-radius:10px;
+}
+
+/* Ajuste fino de separaciones dentro del consolidado */
+.mm-grid{ gap:10px; }           /* grid un poco más ceñido */
+.mm-card + .mm-card{ margin-top:10px; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* 1) Quita relleno del contenedor principal */
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stAppViewContainer"] > .main .block-container{
+  padding-top:0 !important;
+  margin-top:0 !important;
+}
+
+/* 3) Asegura que los H1/H2 no agreguen margen arriba */
+.block-container h1, .block-container h2{ margin-top:0 !important; }
+
+/* 4) Colapsa wrappers de components.html invisibles (iframes de altura 0) */
+.block-container > div:has(> iframe[height="0"]:only-child),
+.block-container > div:has(> iframe[style*="height: 0px"]:only-child){
+  margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
+}
+
+/* 5) Por si usas tu barra pegajosa personalizada */
+</style>
+""", unsafe_allow_html=True)
+
 
 # ====== Imports básicos ======
 from datetime import date, timedelta, datetime
@@ -254,14 +317,13 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os, json, hmac, base64, time
 import extra_streamlit_components as stx
-import streamlit.components.v1 as components
+import math
 
 
 
 # ---------------------------------------------------------
 # Ajuste visual por defecto (se puede cambiar en Admin)
 # ---------------------------------------------------------
-ADJ_VENTAS_EFECTIVO = 455_500.0
 DB_FILE = Path("finanzas.sqlite")
 
 def _db_sig() -> tuple[int, int]:
@@ -519,6 +581,23 @@ def get_conn():
     conn.execute("PRAGMA foreign_keys=ON;")
     return conn
 
+def _col_exists(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    return any(r[1] == col for r in cur.fetchall())
+
+def migrate_add_owner_columns():
+    """
+    Asegura columna 'owner' en tablas clave y rellena lo existente como 'admin'.
+    Se puede ejecutar múltiples veces sin romper nada.
+    """
+    tables = ["transacciones", "gastos", "prestamos", "inventario", "deudores_ini", "consolidado_diario"]
+    with get_conn() as conn:
+        for t in tables:
+            if not _col_exists(conn, t, "owner"):
+                conn.execute(f"ALTER TABLE {t} ADD COLUMN owner TEXT")
+                # Backfill: todo lo que ya estaba pasa a ser del admin
+                conn.execute(f"UPDATE {t} SET owner='admin' WHERE owner IS NULL OR owner=''")
+
 def audit(action: str,
           table_name: str | None = None,
           row_id: int | None = None,
@@ -554,7 +633,7 @@ def audit(action: str,
 def init_db():
     with get_conn() as conn:
         conn.executescript(SCHEMA)
-init_db()
+
 
 def ensure_indexes():
     with get_conn() as conn:
@@ -565,7 +644,65 @@ def ensure_indexes():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_log(action)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_table   ON audit_log(table_name)")
 
+        # Índices por 'owner' solo si la columna existe (evita el error)
+        for t in ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]:
+            if _col_exists(conn, t, "owner"):
+                conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)")
+                if t == "transacciones":
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_trans_owner_id ON transacciones(owner, id)")
+
+init_db()
+migrate_add_owner_columns()
 ensure_indexes()
+
+def _table_cols(conn, table):
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    return {row[1] for row in cur.fetchall()}
+
+def _add_col_if_missing(conn, table, col_def):
+    name = col_def.split()[0]
+    if name not in _table_cols(conn, table):
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+
+def migrate_to_per_user_data():
+    try:
+        with get_conn() as conn:
+            # 1) Dueño de datos en tablas operativas
+            for t in ["transacciones","gastos","prestamos","inventario","deudores_ini"]:
+                _add_col_if_missing(conn, t, "owner TEXT")
+                conn.execute(f"UPDATE {t} SET owner=COALESCE(NULLIF(owner,''),'admin') WHERE owner IS NULL OR owner=''")
+                conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)")
+
+            # 2) consolidado_diario → vuelve único por (fecha, owner)
+            cols = _table_cols(conn, "consolidado_diario")
+            if "owner" not in cols:
+                # crear nueva tabla con PK auto y UNIQUE(fecha,owner)
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS consolidado_diario_v2 (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  fecha TEXT,
+                  efectivo REAL DEFAULT 0,
+                  notas TEXT,
+                  owner TEXT,
+                  UNIQUE(fecha, owner)
+                )
+                """)
+                # mover datos viejos con owner='admin'
+                cur = conn.execute("SELECT fecha, efectivo, notas FROM consolidado_diario")
+                rows = cur.fetchall()
+                for fecha, efectivo, notas in rows:
+                    conn.execute("""
+                      INSERT OR IGNORE INTO consolidado_diario_v2 (fecha, efectivo, notas, owner)
+                      VALUES (?, ?, ?, 'admin')
+                    """, (fecha, efectivo, notas))
+                # reemplazar tabla
+                conn.execute("DROP TABLE consolidado_diario")
+                conn.execute("ALTER TABLE consolidado_diario_v2 RENAME TO consolidado_diario")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_consolidado_owner ON consolidado_diario(owner)")
+    except Exception as e:
+        st.warning(f"⚠️ Migración per-user falló: {e}")
+
+migrate_to_per_user_data()
 
 # ========= Gestión de usuarios (SQLite) =========
 def db_get_user(username: str):
@@ -653,7 +790,7 @@ def login_form() -> None:
     st.title("Iniciar sesión")
 
     with st.form("login_form"):
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, gap="small")
         username = col1.text_input("Usuario")
         password = col2.text_input("Contraseña", type="password")
         remember = st.checkbox("Recordarme por 7 días", value=True)
@@ -713,6 +850,26 @@ def require_user() -> tuple[str, str]:
 def is_admin() -> bool:
     return st.session_state.get("auth_role") == "admin"
 
+def _row_owner() -> str:
+    # Quién es el dueño de la fila que se inserta
+    return (st.session_state.get("auth_user") or "admin").strip()
+
+def _owner_filter_sql(table: str) -> tuple[str, tuple]:
+    # Admin ve todo; usuario normal ve solo lo suyo
+    u = st.session_state.get("auth_user")
+    if is_admin():
+        return f"SELECT * FROM {table}", ()
+    else:
+        return f"SELECT * FROM {table} WHERE owner = ?", (u or "",)
+
+def _current_owner() -> str:
+    # dueño = usuario logueado; si no hay sesión (casos raros), "admin" para seeds/restore
+    return st.session_state.get("auth_user") or "admin"
+
+def _view_all_enabled() -> bool:
+    # Admin puede activar "ver todo" desde la sidebar
+    return bool(st.session_state.get("admin_view_all", False) and is_admin())
+
 # =========================================================
 # Utilidades meta
 # =========================================================
@@ -751,122 +908,112 @@ def get_meta(key: str, default: float|str|None=None):
 def set_corte_deudores(d: date):
     set_meta("CORTE_DEUDORES", d.isoformat())
 
-# >>> Ajustes administrables cargados desde meta <<<
-ADJ_VENTAS_EFECTIVO = float(get_meta("ADJ_VENTAS_EFECTIVO", ADJ_VENTAS_EFECTIVO))
+# Ajuste visual eliminado: no se usa más
+ADJ_VENTAS_EFECTIVO = 0.0
 
 # =========================================================
 # Lectores cacheados (invalidados por mtime/size del .sqlite)
 # =========================================================
 @st.cache_data(show_spinner=False)
-def _read_ventas(_sig: tuple[int, int]) -> pd.DataFrame:
+def _read_ventas(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
+    q = "SELECT * FROM transacciones" + ("" if view_all else " WHERE owner=?")
+    params = () if view_all else (owner,)
     with get_conn() as conn:
-        df = pd.read_sql_query("SELECT * FROM transacciones", conn)
+        df = pd.read_sql_query(q, conn, params=params)
     if df.empty:
-        cols = ['id','fecha','cliente_nombre','costo','venta','ganancia','debe_flag','paga','abono1','abono2','observacion']
+        cols = ['id','fecha','cliente_nombre','costo','venta','ganancia','debe_flag','paga','abono1','abono2','observacion','owner']
         return pd.DataFrame(columns=cols)
     df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce', dayfirst=True).dt.date
     for c in ['costo','venta','ganancia','abono1','abono2']:
         df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0.0)
     df['debe_flag'] = df['debe_flag'].fillna(0).astype(int)
     df['observacion'] = (
-        df['observacion']
-          .astype(str)
-          .str.strip()
-          .str.upper()
-          .replace({'NAN':'', 'NULL':'', 'NONE':'', 'NA':'', '<NA>':''})
+        df['observacion'].astype(str).str.strip().str.upper()
+        .replace({'NAN':'', 'NULL':'', 'NONE':'', 'NA':'', '<NA>':''})
     )
     return df
 
 def read_ventas() -> pd.DataFrame:
-    return _read_ventas(_db_sig())
+    return _read_ventas(_db_sig(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
-def _read_gastos(_sig: tuple[int, int]) -> pd.DataFrame:
+def _read_gastos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
+    q = "SELECT * FROM gastos" + ("" if view_all else " WHERE owner=?")
+    params = () if view_all else (owner,)
     with get_conn() as conn:
-        df = pd.read_sql_query("SELECT * FROM gastos", conn)
+        df = pd.read_sql_query(q, conn, params=params)
     if df.empty:
-        return pd.DataFrame(columns=['id','fecha','concepto','valor','notas'])
+        return pd.DataFrame(columns=['id','fecha','concepto','valor','notas','owner'])
     df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce', dayfirst=True).dt.date
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
     return df
 
 def read_gastos() -> pd.DataFrame:
-    return _read_gastos(_db_sig())
+    return _read_gastos(_db_sig(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
-def _read_prestamos(_sig: tuple[int, int]) -> pd.DataFrame:
+def _read_prestamos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
+    q = "SELECT * FROM prestamos" + ("" if view_all else " WHERE owner=?")
+    params = () if view_all else (owner,)
     with get_conn() as conn:
-        df = pd.read_sql_query("SELECT * FROM prestamos", conn)
+        df = pd.read_sql_query(q, conn, params=params)
     if df.empty:
-        return pd.DataFrame(columns=['id','nombre','valor'])
+        return pd.DataFrame(columns=['id','nombre','valor','owner'])
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
     return df
 
 def read_prestamos() -> pd.DataFrame:
-    return _read_prestamos(_db_sig())
+    return _read_prestamos(_db_sig(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
-def _read_inventario(_sig: tuple[int, int]) -> pd.DataFrame:
+def _read_inventario(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
+    q = "SELECT * FROM inventario" + ("" if view_all else " WHERE owner=?")
+    params = () if view_all else (owner,)
     with get_conn() as conn:
-        df = pd.read_sql_query("SELECT * FROM inventario", conn)
+        df = pd.read_sql_query(q, conn, params=params)
     if df.empty:
-        return pd.DataFrame(columns=['id','producto','valor_costo'])
+        return pd.DataFrame(columns=['id','producto','valor_costo','owner'])
     df['valor_costo'] = pd.to_numeric(df['valor_costo'], errors='coerce').fillna(0.0)
     return df
 
 def read_inventario() -> pd.DataFrame:
-    return _read_inventario(_db_sig())
+    return _read_inventario(_db_sig(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
-def _read_consolidado(_sig: tuple[int, int]) -> pd.DataFrame:
+def _read_consolidado(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
+    q = "SELECT * FROM consolidado_diario" + ("" if view_all else " WHERE owner=?")
+    params = () if view_all else (owner,)
     with get_conn() as conn:
-        df = pd.read_sql_query("SELECT * FROM consolidado_diario", conn)
+        df = pd.read_sql_query(q, conn, params=params)
     if df.empty:
-        return pd.DataFrame(columns=['fecha','efectivo','notas'])
+        return pd.DataFrame(columns=['fecha','efectivo','notas','owner'])
     df['fecha_raw'] = df['fecha'].astype(str)
     df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce', dayfirst=True).dt.date
     df['efectivo'] = pd.to_numeric(df['efectivo'], errors='coerce').fillna(0.0)
     return df
 
 def read_consolidado() -> pd.DataFrame:
-    return _read_consolidado(_db_sig())
+    return _read_consolidado(_db_sig(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
-def _read_deudores_ini(_sig: tuple[int, int]) -> pd.DataFrame:
+def _read_deudores_ini(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
+    q = "SELECT * FROM deudores_ini" + ("" if view_all else " WHERE owner=?")
+    params = () if view_all else (owner,)
     with get_conn() as conn:
-        df = pd.read_sql_query("SELECT * FROM deudores_ini", conn)
+        df = pd.read_sql_query(q, conn, params=params)
     if df.empty:
-        return pd.DataFrame(columns=['id','nombre','valor'])
-
-    cols = {c.lower(): c for c in df.columns}
-    if 'nombre' not in df.columns and cols.get('cliente'):
-        df = df.rename(columns={cols['cliente']: 'nombre'})
-    elif 'nombre' in df.columns and cols.get('cliente'):
-        mask = df['nombre'].astype(str).str.strip().eq("")
-        df.loc[mask, 'nombre'] = df.loc[mask, cols['cliente']].astype(str)
-
-    if 'valor' not in df.columns and cols.get('saldo'):
-        df = df.rename(columns={cols['saldo']: 'valor'})
-    elif 'valor' in df.columns and cols.get('saldo'):
-        v = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
-        s = pd.to_numeric(df[cols['saldo']], errors='coerce').fillna(0.0)
-        if v.abs().sum() == 0 and s.abs().sum() > 0:
-            df['valor'] = s
-
-    if 'id' not in df.columns:
-        df.insert(0, 'id', range(1, len(df) + 1))
-
+        return pd.DataFrame(columns=['id','nombre','valor','owner'])
     df['nombre'] = df['nombre'].astype(str).str.strip()
     df['valor']  = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
-    return df[['id','nombre','valor']]
+    return df[['id','nombre','valor','owner']]
 
 def read_deudores_ini() -> pd.DataFrame:
-    return _read_deudores_ini(_db_sig())
+    return _read_deudores_ini(_db_sig(), _current_owner(), _view_all_enabled())
 
 # ========= Corte y unificación de deudores =========
 def get_corte_deudores() -> date:
@@ -884,40 +1031,66 @@ def get_corte_deudores() -> date:
         return date.today()
 
 def deudores_unificados(corte: date | None = None) -> tuple[pd.DataFrame, float]:
+    """
+    Devuelve SOLO deudores generados desde 'corte' (ventas a crédito - abonos),
+    agregados por CLIENTE. Ignora totalmente la tabla de saldos iniciales.
+    """
     if corte is None:
         corte = get_corte_deudores()
 
-    ini = read_deudores_ini()
-    ini_df = ini.copy()
-    ini_df["CLIENTE"] = ini_df["nombre"].astype(str).str.strip().str.upper()
-    ini_df = (ini_df.groupby("CLIENTE", as_index=False)["valor"].sum()
-              .rename(columns={"valor": "INICIAL"}))
-
     v = read_ventas()
     if v.empty:
-        return pd.DataFrame(columns=["CLIENTE", "NUEVO", "INICIAL", "TOTAL"]), 0.0
+        return pd.DataFrame(columns=["CLIENTE", "NUEVO", "TOTAL"]), 0.0
 
     mov = v[["fecha", "cliente_nombre", "venta", "abono1", "abono2", "debe_flag"]].copy()
     mov["CLIENTE"] = mov["cliente_nombre"].astype(str).str.strip().str.upper()
     for c in ["venta", "abono1", "abono2", "debe_flag"]:
         mov[c] = pd.to_numeric(mov[c], errors="coerce").fillna(0.0)
 
-    mov = mov[mov["fecha"] >= corte]
+    # Solo desde el corte y solo ventas a crédito
+    mov = mov[(mov["fecha"] >= corte) & (mov["debe_flag"] == 1)]
     if mov.empty:
-        return pd.DataFrame(columns=["CLIENTE", "NUEVO", "INICIAL", "TOTAL"]), 0.0
+        return pd.DataFrame(columns=["CLIENTE", "NUEVO", "TOTAL"]), 0.0
 
-    ventas_credito = mov.loc[mov["debe_flag"] == 1].groupby("CLIENTE")["venta"].sum(min_count=1)
+    ventas_credito = mov.groupby("CLIENTE")["venta"].sum(min_count=1)
+    abonos_total   = (mov["abono1"] + mov["abono2"]).groupby(mov["CLIENTE"]).sum(min_count=1)
+
+    nuevo = (ventas_credito.fillna(0.0) - abonos_total.fillna(0.0)).clip(lower=0.0)
+
+    out = nuevo.rename("NUEVO").reset_index()
+    out["TOTAL"] = out["NUEVO"]  # alias para mantener interfaz previa
+    out = out[out["NUEVO"] > 0].sort_values(["TOTAL"], ascending=False)
+
+    total_visual = float(out["TOTAL"].sum()) if not out.empty else 0.0
+    return out[["CLIENTE", "NUEVO", "TOTAL"]], total_visual
+
+def deudores_sin_corte() -> tuple[pd.DataFrame, float]:
+    """
+    Deudores totales (toda la historia): ventas a crédito - abonos,
+    agregados por CLIENTE. Sin fecha de corte ni saldos iniciales.
+    """
+    v = read_ventas()
+    if v.empty:
+        return pd.DataFrame(columns=["CLIENTE", "NUEVO"]), 0.0
+
+    mov = v[["cliente_nombre", "venta", "abono1", "abono2", "debe_flag"]].copy()
+    mov["CLIENTE"] = mov["cliente_nombre"].astype(str).str.strip().str.upper()
+    for c in ["venta", "abono1", "abono2", "debe_flag"]:
+        mov[c] = pd.to_numeric(mov[c], errors="coerce").fillna(0.0)
+
+    mov = mov[mov["debe_flag"] == 1]
+    if mov.empty:
+        return pd.DataFrame(columns=["CLIENTE", "NUEVO"]), 0.0
+
+    ventas_credito = mov.groupby("CLIENTE")["venta"].sum(min_count=1)
     abonos_total   = (mov["abono1"] + mov["abono2"]).groupby(mov["CLIENTE"]).sum(min_count=1)
     nuevo = (ventas_credito.fillna(0.0) - abonos_total.fillna(0.0)).clip(lower=0.0)
 
-    out = ini_df.merge(nuevo.rename("NUEVO").reset_index(), on="CLIENTE", how="outer")
-    out["INICIAL"] = pd.to_numeric(out["INICIAL"], errors="coerce").fillna(0.0)
-    out["NUEVO"]   = pd.to_numeric(out["NUEVO"],   errors="coerce").fillna(0.0)
-    out["TOTAL"]   = out["INICIAL"] + out["NUEVO"]
+    out = nuevo.rename("NUEVO").reset_index()
+    out = out[out["NUEVO"] > 0].sort_values("NUEVO", ascending=False)
 
-    out_pos = out[out["NUEVO"] > 0].copy().sort_values(["TOTAL", "INICIAL"], ascending=False)
-    total_visual = float(out_pos["TOTAL"].sum()) if not out_pos.empty else 0.0
-    return out_pos[["CLIENTE", "NUEVO", "INICIAL", "TOTAL"]], total_visual
+    total = float(out["NUEVO"].sum()) if not out.empty else 0.0
+    return out[["CLIENTE", "NUEVO"]], total
 
 # =========================================================
 # Normalizadores y helpers
@@ -931,40 +1104,58 @@ SHEET_COLUMNS_MAP_VENTAS = {
 RECO_BOOL = {"x":1,"X":1,"si":1,"sí":1,"true":1,True:1,1:1}
 
 def _parse_pesos(cell) -> float:
-    if pd.isna(cell): return 0.0
+    """Convierte texto con miles/decimales (., ,) a float. Soporta (1.234,56), 1,234.56, 1234, 1234.5, etc."""
+    if pd.isna(cell):
+        return 0.0
     if isinstance(cell, (int, float, np.integer, np.floating)):
         try:
             x = float(cell)
-            return 0.0 if np.isnan(x) else float(round(x))
+            return 0.0 if np.isnan(x) else x
         except Exception:
             return 0.0
+
     s = str(cell).strip()
-    if s == "": return 0.0
-    # Soporta (1.000), -1.000, 1.000,00
+    if not s:
+        return 0.0
+
+    # signo
     neg = False
     if s.startswith("(") and s.endswith(")"):
-        neg = True
-        s = s[1:-1]
-    if s.startswith("−"):  # signo unicode
-        neg = True
-        s = s[1:]
-    if s.startswith("-"):
-        neg = True
-        s = s[1:]
+        neg, s = True, s[1:-1]
+    if s.startswith("−") or s.startswith("-"):
+        neg, s = True, s[1:]
+
     s = s.replace(" ", "")
-    # Ignora decimales; conserva miles
-    if "," in s and "." in s:
-        s = s.replace(".", "").split(",")[0]
-    elif "," in s and "." not in s:
-        parts = s.split(",")
-        s = "".join(parts) if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]) else parts[0]
-    elif "." in s and "," not in s:
-        parts = s.split(".")
-        s = "".join(parts) if len(parts) > 1 and all(len(p) == 3 for p in parts[1:]) else parts[0]
+
+    # Posición del último separador decimal potencial
+    last_comma = s.rfind(",")
+    last_dot   = s.rfind(".")
+    dec_pos = max(last_comma, last_dot)
+
+    def only_digits(x): return re.sub(r"\D", "", x or "")
+
+    if dec_pos > -1 and dec_pos < len(s) - 1:
+        dec_sep = s[dec_pos]
+        int_part = only_digits(s[:dec_pos])
+        dec_part = only_digits(s[dec_pos+1:])
+
+        # Heurística: si solo hay un tipo de separador, aparece varias veces y la cola es de 3 dígitos,
+        # probablemente eran separadores de miles -> sin decimales.
+        only_one_kind = (("," in s) ^ ("." in s))
+        if only_one_kind and s.count(dec_sep) > 1 and len(dec_part) == 3:
+            int_part = only_digits(s)
+            dec_part = ""
+
+        if dec_part:
+            # máximo 2 decimales
+            val = float(f"{int_part}.{dec_part[:2]}") if int_part else float(f"0.{dec_part[:2]}")
+        else:
+            val = float(int_part) if int_part else 0.0
     else:
-        s = re.sub(r"\D", "", s)
-    s = re.sub(r"[^\d]", "", s)
-    val = float(s) if s else 0.0
+        # sin separador decimal: quita todo lo que no sea dígito
+        int_part = only_digits(s)
+        val = float(int_part) if int_part else 0.0
+
     return -val if neg else val
 
 def to_pesos_series(series: pd.Series) -> pd.Series:
@@ -1089,45 +1280,46 @@ def _to_int(v) -> int:
 # Inserciones / Upserts
 # =========================================================
 def delete_consolidado(fecha_str: str):
+    owner = _current_owner()
     with get_conn() as conn:
-        cur = conn.execute("SELECT * FROM consolidado_diario WHERE fecha=?", (fecha_str,))
+        cur = conn.execute("SELECT * FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner))
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
-        conn.execute("DELETE FROM consolidado_diario WHERE fecha=?", (fecha_str,))
-    audit("delete", table_name="consolidado_diario", extra={"fecha": fecha_str}, before=before)
+        conn.execute("DELETE FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner))
+    audit("delete", table_name="consolidado_diario", extra={"fecha": fecha_str, "owner": owner}, before=before)
 
 def upsert_consolidado(fecha_str: str, efectivo: float, notas: str=""):
+    owner = _current_owner()
     before = None
     with get_conn() as conn:
-        cur = conn.execute("SELECT * FROM consolidado_diario WHERE fecha=?", (fecha_str,))
+        cur = conn.execute("SELECT * FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner))
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
 
     with get_conn() as conn:
-        conn.execute(
-            """
-            INSERT INTO consolidado_diario(fecha,efectivo,notas)
-            VALUES(?,?,?)
-            ON CONFLICT(fecha) DO UPDATE SET
+        conn.execute("""
+            INSERT INTO consolidado_diario(fecha,efectivo,notas,owner)
+            VALUES(?,?,?,?)
+            ON CONFLICT(fecha, owner) DO UPDATE SET
                 efectivo=excluded.efectivo,
                 notas=excluded.notas
-            """,
-            (fecha_str, _to_float(efectivo), str(notas or '').strip())
-        )
+        """, (fecha_str, _to_float(efectivo), str(notas or '').strip(), owner))
     audit("upsert", table_name="consolidado_diario",
-          extra={"fecha": fecha_str},
+          extra={"fecha": fecha_str, "owner": owner},
           before=before,
-          after={"fecha": fecha_str, "efectivo": float(efectivo), "notas": str(notas or '').strip()})
+          after={"fecha": fecha_str, "efectivo": float(efectivo), "notas": str(notas or '').strip(), "owner": owner})
 
 def get_efectivo_global_now() -> tuple[float, str]:
+    owner = _current_owner()
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT efectivo, notas FROM consolidado_diario WHERE UPPER(TRIM(fecha))='GLOBAL'"
+            "SELECT efectivo, notas FROM consolidado_diario WHERE UPPER(TRIM(fecha))='GLOBAL' AND owner=?",
+            (owner,)
         ).fetchone()
     if row:
-        ef = float(row[0] or 0.0); nt = str(row[1] or ""); return ef, nt
+        return float(row[0] or 0.0), str(row[1] or "")
     return 0.0, ""
 
 def insert_venta(r: dict) -> int:
@@ -1142,17 +1334,18 @@ def insert_venta(r: dict) -> int:
         'abono1': _to_float(r.get('abono1')),
         'abono2': _to_float(r.get('abono2')),
         'observacion': str(r.get('observacion') or '').strip(),
+        'owner': _row_owner(),
     }
     with get_conn() as conn:
         cur = conn.execute(
             """
             INSERT INTO transacciones
-            (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion, owner)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (payload['fecha'], payload['cliente_nombre'], payload['costo'], payload['venta'],
              payload['ganancia'], payload['debe_flag'], payload['paga'], payload['abono1'],
-             payload['abono2'], payload['observacion'])
+             payload['abono2'], payload['observacion'], payload['owner'])
         )
         row_id = cur.lastrowid
     audit("insert", table_name="transacciones", row_id=row_id, after=payload)
@@ -1164,11 +1357,12 @@ def insert_gasto(r: dict) -> int:
         'concepto': str(r.get('concepto') or '').strip(),
         'valor': _to_float(r.get('valor')),
         'notas': str(r.get('notas') or '').strip(),
+        'owner': _row_owner(),
     }
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO gastos (fecha, concepto, valor, notas) VALUES (?, ?, ?, ?)",
-            (payload['fecha'], payload['concepto'], payload['valor'], payload['notas'])
+            "INSERT INTO gastos (fecha, concepto, valor, notas, owner) VALUES (?, ?, ?, ?, ?)",
+            (payload['fecha'], payload['concepto'], payload['valor'], payload['notas'], payload['owner'])
         )
         row_id = cur.lastrowid
     audit("insert", table_name="gastos", row_id=row_id, after=payload)
@@ -1178,11 +1372,12 @@ def insert_prestamo(r: dict) -> int:
     payload = {
         'nombre': str(r.get('nombre') or '').strip(),
         'valor': _to_float(r.get('valor')),
+        'owner': _row_owner(),
     }
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO prestamos (nombre, valor) VALUES (?, ?)",
-            (payload['nombre'], payload['valor'])
+            "INSERT INTO prestamos (nombre, valor, owner) VALUES (?, ?, ?)",
+            (payload['nombre'], payload['valor'], payload['owner'])
         )
         row_id = cur.lastrowid
     audit("insert", table_name="prestamos", row_id=row_id, after=payload)
@@ -1192,11 +1387,12 @@ def insert_inventario(r: dict) -> int:
     payload = {
         'producto': str(r.get('producto') or '').strip(),
         'valor_costo': _to_float(r.get('valor_costo')),
+        'owner': _row_owner(),
     }
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO inventario (producto, valor_costo) VALUES (?, ?)",
-            (payload['producto'], payload['valor_costo'])
+            "INSERT INTO inventario (producto, valor_costo, owner) VALUES (?, ?, ?)",
+            (payload['producto'], payload['valor_costo'], payload['owner'])
         )
         row_id = cur.lastrowid
     audit("insert", table_name="inventario", row_id=row_id, after=payload)
@@ -1206,11 +1402,12 @@ def insert_deudor_ini(r: dict) -> int:
     payload = {
         'nombre': str(r.get('nombre') or '').strip(),
         'valor': _to_float(r.get('valor')),
+        'owner': _row_owner(),
     }
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO deudores_ini (nombre, valor) VALUES (?, ?)",
-            (payload['nombre'], payload['valor'])
+            "INSERT INTO deudores_ini (nombre, valor, owner) VALUES (?, ?, ?)",
+            (payload['nombre'], payload['valor'], payload['owner'])
         )
         row_id = cur.lastrowid
     audit("insert", table_name="deudores_ini", row_id=row_id, after=payload)
@@ -1225,72 +1422,237 @@ def _fetch_row_as_dict(conn: sqlite3.Connection, table: str, row_id: int) -> dic
     return dict(zip(cols, r))
 
 def delete_venta_id(row_id: int):
+    where = "id=?"
+    params = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params.append(_current_owner())
+
     with get_conn() as conn:
-        before = _fetch_row_as_dict(conn, "transacciones", row_id)
-        conn.execute("DELETE FROM transacciones WHERE id=?", (int(row_id),))
+        cur = conn.execute(f"SELECT * FROM transacciones WHERE {where}", tuple(params))
+        row = cur.fetchone()
+        cols = [d[0] for d in cur.description] if cur.description else []
+        before = dict(zip(cols, row)) if row else None
+
+        conn.execute(f"DELETE FROM transacciones WHERE {where}", tuple(params))
+
     audit("delete", table_name="transacciones", row_id=int(row_id), before=before)
 
+
 def delete_gasto_id(row_id: int):
+    where = "id=?"
+    params = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params.append(_current_owner())
+
     with get_conn() as conn:
-        before = _fetch_row_as_dict(conn, "gastos", row_id)
-        conn.execute("DELETE FROM gastos WHERE id=?", (int(row_id),))
+        cur = conn.execute(f"SELECT * FROM gastos WHERE {where}", tuple(params))
+        row = cur.fetchone()
+        cols = [d[0] for d in cur.description] if cur.description else []
+        before = dict(zip(cols, row)) if row else None
+
+        conn.execute(f"DELETE FROM gastos WHERE {where}", tuple(params))
+
     audit("delete", table_name="gastos", row_id=int(row_id), before=before)
 
+
 def delete_prestamo_id(row_id: int):
+    where = "id=?"
+    params = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params.append(_current_owner())
+
     with get_conn() as conn:
-        before = _fetch_row_as_dict(conn, "prestamos", row_id)
-        conn.execute("DELETE FROM prestamos WHERE id=?", (int(row_id),))
+        cur = conn.execute(f"SELECT * FROM prestamos WHERE {where}", tuple(params))
+        row = cur.fetchone()
+        cols = [d[0] for d in cur.description] if cur.description else []
+        before = dict(zip(cols, row)) if row else None
+
+        conn.execute(f"DELETE FROM prestamos WHERE {where}", tuple(params))
+
     audit("delete", table_name="prestamos", row_id=int(row_id), before=before)
 
+
 def delete_inventario_id(row_id: int):
+    where = "id=?"
+    params = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params.append(_current_owner())
+
     with get_conn() as conn:
-        before = _fetch_row_as_dict(conn, "inventario", row_id)
-        conn.execute("DELETE FROM inventario WHERE id=?", (int(row_id),))
+        cur = conn.execute(f"SELECT * FROM inventario WHERE {where}", tuple(params))
+        row = cur.fetchone()
+        cols = [d[0] for d in cur.description] if cur.description else []
+        before = dict(zip(cols, row)) if row else None
+
+        conn.execute(f"DELETE FROM inventario WHERE {where}", tuple(params))
+
     audit("delete", table_name="inventario", row_id=int(row_id), before=before)
 
 def update_venta_fields(row_id: int, **changes) -> bool:
-    """
-    Actualiza campos de una venta (fila de transacciones) de forma parcial.
-    Uso típico: update_venta_fields(123, abono2=50000)  # solo cambia abono2
-    También puedes pasar abono1, paga, etc.
-    """
-    allowed = {
-        "fecha", "cliente_nombre", "costo", "venta", "ganancia",
-        "debe_flag", "paga", "abono1", "abono2", "observacion"
-    }
+    allowed = {"fecha","cliente_nombre","costo","venta","ganancia","debe_flag","paga","abono1","abono2","observacion"}
     if not changes:
         return False
 
-    # Sanitiza tipos
     payload = {}
     for k, v in changes.items():
         if k not in allowed:
             continue
-        if k in {"costo", "venta", "ganancia", "abono1", "abono2"}:
-            payload[k] = _to_float(v)
-        elif k == "debe_flag":
-            payload[k] = _to_int(v)
-        elif k == "fecha":
-            payload[k] = _to_date_str(v)
-        else:
-            payload[k] = str(v or "").strip()
-
+        if k in {"costo","venta","ganancia","abono1","abono2"}: payload[k] = _to_float(v)
+        elif k == "debe_flag": payload[k] = _to_int(v)
+        elif k == "fecha": payload[k] = _to_date_str(v)
+        else: payload[k] = str(v or "").strip()
     if not payload:
         return False
 
+    where = "id=?"
+    params_where = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params_where.append(_current_owner())
+
     with get_conn() as conn:
-        before = _fetch_row_as_dict(conn, "transacciones", int(row_id))
-        if before is None:
+        cur = conn.execute(f"SELECT * FROM transacciones WHERE {where}", tuple(params_where))
+        before_row = cur.fetchone()
+        if not before_row:
+            audit("update.denied", table_name="transacciones", row_id=int(row_id),
+                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
             return False
 
-        sets = ", ".join([f"{k}=?" for k in payload.keys()])
-        vals = list(payload.values()) + [int(row_id)]
-        conn.execute(f"UPDATE transacciones SET {sets} WHERE id=?", vals)
+        cols = [d[0] for d in cur.description]
+        before = dict(zip(cols, before_row))
 
-        after = before.copy()
-        after.update(payload)
+        sets = ", ".join([f"{k}=?" for k in payload.keys()])
+        vals = list(payload.values()) + params_where
+        conn.execute(f"UPDATE transacciones SET {sets} WHERE {where}", vals)
+
+        after = before.copy(); after.update(payload)
 
     audit("update", table_name="transacciones", row_id=int(row_id), before=before, after=after)
+    return True
+
+
+def update_gasto_fields(row_id: int, **changes) -> bool:
+    allowed = {"fecha","concepto","valor","notas"}
+    if not changes:
+        return False
+
+    payload = {}
+    for k, v in changes.items():
+        if k not in allowed: continue
+        if k == "valor": payload[k] = _to_float(v)
+        elif k == "fecha": payload[k] = _to_date_str(v)
+        else: payload[k] = str(v or "").strip()
+    if not payload:
+        return False
+
+    where = "id=?"
+    params_where = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params_where.append(_current_owner())
+
+    with get_conn() as conn:
+        cur = conn.execute(f"SELECT * FROM gastos WHERE {where}", tuple(params_where))
+        before_row = cur.fetchone()
+        if not before_row:
+            audit("update.denied", table_name="gastos", row_id=int(row_id),
+                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
+            return False
+
+        cols = [d[0] for d in cur.description]
+        before = dict(zip(cols, before_row))
+
+        sets = ", ".join([f"{k}=?" for k in payload.keys()])
+        vals = list(payload.values()) + params_where
+        conn.execute(f"UPDATE gastos SET {sets} WHERE {where}", vals)
+
+        after = before.copy(); after.update(payload)
+
+    audit("update", table_name="gastos", row_id=int(row_id), before=before, after=after)
+    return True
+
+
+def update_prestamo_fields(row_id: int, **changes) -> bool:
+    allowed = {"nombre","valor"}
+    if not changes:
+        return False
+
+    payload = {}
+    for k, v in changes.items():
+        if k not in allowed: continue
+        if k == "valor": payload[k] = _to_float(v)
+        else: payload[k] = str(v or "").strip()
+    if not payload:
+        return False
+
+    where = "id=?"
+    params_where = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params_where.append(_current_owner())
+
+    with get_conn() as conn:
+        cur = conn.execute(f"SELECT * FROM prestamos WHERE {where}", tuple(params_where))
+        before_row = cur.fetchone()
+        if not before_row:
+            audit("update.denied", table_name="prestamos", row_id=int(row_id),
+                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
+            return False
+
+        cols = [d[0] for d in cur.description]
+        before = dict(zip(cols, before_row))
+
+        sets = ", ".join([f"{k}=?" for k in payload.keys()])
+        vals = list(payload.values()) + params_where
+        conn.execute(f"UPDATE prestamos SET {sets} WHERE {where}", vals)
+
+        after = before.copy(); after.update(payload)
+
+    audit("update", table_name="prestamos", row_id=int(row_id), before=before, after=after)
+    return True
+
+
+def update_inventario_fields(row_id: int, **changes) -> bool:
+    allowed = {"producto","valor_costo"}
+    if not changes:
+        return False
+
+    payload = {}
+    for k, v in changes.items():
+        if k not in allowed: continue
+        if k == "valor_costo": payload[k] = _to_float(v)
+        else: payload[k] = str(v or "").strip()
+    if not payload:
+        return False
+
+    where = "id=?"
+    params_where = [int(row_id)]
+    if not _view_all_enabled():
+        where += " AND owner=?"
+        params_where.append(_current_owner())
+
+    with get_conn() as conn:
+        cur = conn.execute(f"SELECT * FROM inventario WHERE {where}", tuple(params_where))
+        before_row = cur.fetchone()
+        if not before_row:
+            audit("update.denied", table_name="inventario", row_id=int(row_id),
+                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
+            return False
+
+        cols = [d[0] for d in cur.description]
+        before = dict(zip(cols, before_row))
+
+        sets = ", ".join([f"{k}=?" for k in payload.keys()])
+        vals = list(payload.values()) + params_where
+        conn.execute(f"UPDATE inventario SET {sets} WHERE {where}", vals)
+
+        after = before.copy(); after.update(payload)
+
+    audit("update", table_name="inventario", row_id=int(row_id), before=before, after=after)
     return True
 
 # =========================================================
@@ -1325,22 +1687,110 @@ def show_flash_if_any():
         pass
     st.success(msg)
 
-def currency_input(label: str, key: str, value: float = 0.0, help: str | None = None, in_form: bool = False) -> float:
-    # En móvil usamos number_input para teclado numérico nativo
-    if st.session_state.get("is_mobile", False):
-        return float(st.number_input(label, key=key, value=float(value), step=100.0, help=help))
-    # Desktop: tu implementación actual con formato
+def currency_input(label: str, key: str, value: float = 0.0,
+                   help: str | None = None, in_form: bool = False, live: bool = True) -> float:
+    """
+    Campo de moneda con formato en vivo (miles '.' y decimales ',').
+    Máximo 2 decimales. Si no hay decimales, no los muestra.
+    """
     state_key = f"{key}_txt"
+
+    # ---- helpers ----
+    def _group_dots(digits: str) -> str:
+        digits = (digits or "").lstrip("0") or "0"
+        out = []
+        for i, ch in enumerate(reversed(digits), 1):
+            out.append(ch)
+            if i % 3 == 0 and i < len(digits):
+                out.append(".")
+        return "".join(reversed(out))
+
+    def _normalize_text(s: str) -> str:
+        if not isinstance(s, str):
+            s = str(s or "")
+        s = s.strip().replace(" ", "")
+        neg = s.startswith("-") or s.startswith("−") or (s.startswith("(") and s.endswith(")"))
+        s2 = s.strip("()").lstrip("-−")
+        dots, commas = s2.count("."), s2.count(",")
+        ld, lc = s2.rfind("."), s2.rfind(",")
+
+        head, frac = "", ""
+        if dots or commas:
+            sep = "." if (ld > lc) else ","
+            parts = s2.split(sep)
+            tail_digits = re.sub(r"\D", "", parts[-1] if parts else "")
+            sep_count = dots if sep == "." else commas
+            if sep_count > 1 and len(tail_digits) == 3:
+                head = re.sub(r"\D", "", s2)
+            elif 1 <= len(tail_digits) <= 2:
+                head = re.sub(r"\D", "", "".join(parts[:-1]))
+                frac = tail_digits[:2]
+            else:
+                head = re.sub(r"\D", "", s2)
+        else:
+            head = re.sub(r"\D", "", s2)
+
+        txt = _group_dots(head) + ("," + frac if frac else "")
+        if neg and txt != "0":
+            txt = "-" + txt
+        return txt
+
+    # ---- preparar valor en session_state ANTES de crear el widget ----
     if state_key not in st.session_state:
-        st.session_state[state_key] = f"{int(round(float(value))):,.0f}"
-    if in_form:
-        st.text_input(label, value=st.session_state[state_key], key=state_key, help=help)
+        try:
+            init = int(round(float(value or 0.0)))
+        except Exception:
+            init = 0
+        st.session_state[state_key] = f"{init:,}".replace(",", ".")
     else:
-        def _fmt():
-            raw = st.session_state[state_key]
-            val = _parse_pesos(raw)
-            st.session_state[state_key] = f"{int(round(val)):,.0f}"
-        st.text_input(label, value=st.session_state[state_key], key=state_key, help=help, on_change=_fmt)
+        raw0 = st.session_state.get(state_key, "")
+        norm0 = _normalize_text(str(raw0))
+        if norm0 != raw0:
+            st.session_state[state_key] = norm0  # OK: aún no hemos creado el widget
+
+    # ---- widget (no escribas en session_state después de esto) ----
+    st.text_input(label, key=state_key, help=help)
+
+    # ---- JS opcional para formateo en vivo mientras se teclea ----
+    if live:
+        import json
+        components.html(f"""
+        <script>
+        (function(){{
+          try{{
+            const doc=(window.parent||window).document;
+            const LABEL={json.dumps(label)};
+            const STATE={json.dumps(state_key)};
+            function groupDots(d){{ d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
+              let out='', c=0; for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0&&i>0) out='.'+out; }} return out; }}
+            function normalize(s){{
+              s=(s||'').replace(/\\s+/g,''); const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'');
+              const dots=(s.match(/\\./g)||[]).length, commas=(s.match(/,/g)||[]).length;
+              const ld=s.lastIndexOf('.'), lc=s.lastIndexOf(',');
+              let head='', frac=''; if(dots||commas){{ const sep=(ld>lc)?'.':','; const parts=s.split(sep);
+                const tail=(parts[parts.length-1]||'').replace(/\\D/g,''); const sc= sep==='.'?dots:commas;
+                if(sc>1 && tail.length===3){{ head=s.replace(/\\D/g,''); }}
+                else if(tail.length>=1 && tail.length<=2){{ head=parts.slice(0,-1).join('').replace(/\\D/g,''); frac=tail.slice(0,2); }}
+                else {{ head=s.replace(/\\D/g,''); }}
+              }} else {{ head=s.replace(/\\D/g,''); }}
+              let out=groupDots(head)+(frac?(','+frac):''); if(neg && out!=='0') out='-'+out; return out;
+            }}
+            function install(el){{
+              if(!el || el.dataset.ttMoneyInstalled===STATE) return;
+              el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
+              const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value){{ const a=(doc.activeElement===el); el.value=v; if(a) el.setSelectionRange(el.value.length, el.value.length); }} }};
+              el.addEventListener('input', ()=>setTimeout(fmt,0)); setTimeout(fmt,0);
+            }}
+            let tries=0, t=setInterval(()=>{{
+              const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
+              if(el){{ clearInterval(t); install(el); }} else if(++tries>40) clearInterval(t);
+            }},80);
+          }}catch(e){{}}
+        }})();
+        </script>
+        """, height=0, width=0)
+
+    # ---- devuelve el float robusto usando tu parser ----
     return float(_parse_pesos(st.session_state[state_key]))
 
 def df_format_money(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
@@ -1381,7 +1831,7 @@ def clear_inventario_form():
     ])
 
 def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
-    q1, q2 = st.columns([2,1])
+    q1, q2 = st.columns([2,1], gap="small")
     texto = q1.text_input("🔎 Buscar", key=f"q_{key}")
     fecha_rango = q2.date_input(
         "Rango",
@@ -1401,40 +1851,6 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
         df2 = df2[(df2["fecha"]>=f0) & (df2["fecha"]<=f1)]
     return df2
 
-components.html("""
-<script>
-(function () {
-  try{
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
-    const topWin = window.parent || window;
-    const doc = topWin.document;
-
-    function closeDrawer(){
-      const ov = doc.querySelector('[data-testid="stSidebarOverlay"]');
-      if (ov && ov.offsetParent !== null){ ov.click(); return true; }
-      const btn = doc.querySelector('[data-testid="stSidebarCollapseControl"] button, [data-testid="collapsedControl"]');
-      if (btn){ btn.click(); return true; }
-      const sb = doc.querySelector('section[data-testid="stSidebar"]');
-      if (sb){
-        sb.style.transform = 'translateX(-110%)';
-        sb.style.visibility = 'hidden';
-        sb.setAttribute('data-tt-closed','1');
-        return true;
-      }
-      return false;
-    }
-
-    let tries = 0;
-    const t = setInterval(function(){
-      if (closeDrawer() || tries++ > 30) clearInterval(t);
-    }, 100);
-    topWin.setTimeout(closeDrawer, 50);
-    topWin.setTimeout(closeDrawer, 250);
-    topWin.setTimeout(closeDrawer, 600);
-  }catch(e){}
-})();
-</script>
-""", height=0, width=0)
 
 # --- User badge (logo + nombre arriba a la derecha) ---
 def _guess_logo_path(candidates: list[str] | None = None) -> str | None:
@@ -1526,26 +1942,14 @@ def show_sticky_header(title_text: str,
                        show_brand_text: bool = False,
                        fixed: bool = False,
                        warn_if_missing: bool = True):
-    st.markdown("""
-    <style>
-      .tt-titlebar{
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-        display:flex; align-items:center; gap:12px;
-        padding: 10px 16px 12px 16px;
-        background: rgba(255,255,255,.97);
-        border-bottom: 1px solid rgba(120,120,135,.15);
-      }
-      .tt-titlebar .ttl{
-        font-size:28px; font-weight:800; color:#111827; white-space:nowrap;
-        overflow:hidden; text-overflow:ellipsis;
-      }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.markdown(
-        f'<div class="tt-titlebar"><div class="ttl">{_clean_title(title_text)}</div></div>',
+        f'''
+        <div class="tt-titlebar" role="banner">
+          <div class="l"></div>
+          <div class="ttl">{_clean_title(title_text)}</div>
+          <div class="r"></div>
+        </div>
+        ''',
         unsafe_allow_html=True
     )
 
@@ -1608,6 +2012,37 @@ def show_sidebar_logo(logo_path: str | None = None, height: int = 64):
         unsafe_allow_html=True
     )
 
+# Compat: _nz usado en editores (convierte None/NaN/strings a float seguro)
+def _nz(x) -> float:
+    return _to_float(x)
+
+def stat_card(label: str, value: str, icon: str, tone: str = "tt-indigo"):
+    st.markdown(
+        f"""
+        <div class="tt-stat {tone}">
+          <div class="ic">{icon}</div>
+          <div class="meta">
+            <div class="lbl">{label}</div>
+            <div class="val">{value}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def stat_min(label: str, value: str, tone: str = "var(--pri)"):
+    """Tarjeta minimal con borde izquierdo en el color 'tone'."""
+    st.markdown(
+        f"""
+        <div class="mm-stat" style="--tone:{tone}">
+          <div class="lbl">{label}</div>
+          <div class="val">{value}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 # =========================
 # Google Sheets Sync
 # =========================
@@ -1663,6 +2098,13 @@ def _gs_client():
                 "Ponlo en la carpeta del proyecto o define GSERVICE_ACCOUNT_FILE."
             )
         creds = Credentials.from_service_account_file(path, scopes=GS_SCOPES)
+    try:
+        sa_email = getattr(creds, "service_account_email", None)
+        if not sa_email:
+            sa_email = json.loads(creds.to_json()).get("client_email")
+        st.session_state["_gs_sa_email"] = sa_email
+    except Exception:
+        pass
 
     return gspread.authorize(creds)
 
@@ -1750,28 +2192,28 @@ def restore_from_gsheets_if_empty():
         if not df.empty:
             df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
             for _, r in df.iterrows():
-                insert_venta(r.to_dict())
+                insert_venta(r.to_dict(), owner_override='admin')
 
         # Gastos
         df = _gs_read_df(GSHEET_MAP["gastos"])
         if not df.empty:
             df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
             for _, r in df.iterrows():
-                insert_gasto(r.to_dict())
+                insert_gasto(r.to_dict(), owner_override='admin')
 
         # Prestamos
         df = _gs_read_df(GSHEET_MAP["prestamos"])
         if not df.empty:
             df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
             for _, r in df.iterrows():
-                insert_prestamo(r.to_dict())
+                insert_prestamo(r.to_dict(), owner_override='admin')
 
         # Inventario
         df = _gs_read_df(GSHEET_MAP["inventario"])
         if not df.empty:
             df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
             for _, r in df.iterrows():
-                insert_inventario(r.to_dict())
+                insert_inventario(r.to_dict(), owner_override='admin')
 
         # Consolidado (incluye "GLOBAL")
         df = _gs_read_df(GSHEET_MAP["consolidado_diario"])
@@ -1786,7 +2228,7 @@ def restore_from_gsheets_if_empty():
         if not df.empty:
             df = df.drop(columns=[c for c in df.columns if c.lower()=="id"], errors="ignore")
             for _, r in df.iterrows():
-                insert_deudor_ini(r.to_dict())
+                insert_deudor_ini(r.to_dict(), owner_override='admin')
 
         st.session_state["_restored_from_gsheets"] = True
         notify_ok("Base restaurada automáticamente desde Google Sheets.")
@@ -1802,6 +2244,10 @@ def finish_and_refresh(msg: str | None = "Listo ✅", tables_to_sync: list[str] 
             sync_tables_to_gsheet(tables_to_sync)
         if msg:
             flash_next_run(msg)   # <- en vez de notify_ok aquí
+        u = st.session_state.get("auth_user")
+        if u:
+            try: backup_user_flush_audit(u)
+            except Exception as _e: pass
     finally:
         st.cache_data.clear()
         st.rerun()
@@ -1934,6 +2380,144 @@ def import_excel_all(xls_file, replace: bool = False) -> dict:
     audit("import.xlsx", table_name="*", extra={"filename": fname, "replace": bool(replace), "stats": stats})
     return stats
 
+import unicodedata
+
+def _slug_user(u: str) -> str:
+    s = unicodedata.normalize("NFKD", str(u)).encode("ascii","ignore").decode("ascii")
+    s = re.sub(r"[^A-Za-z0-9 _-]+", " ", s).strip().upper()
+    s = re.sub(r"\s+", " ", s)
+    return s[:60] or "USER"
+
+def _meta_key_user_sheet(slug: str) -> str:
+    return f"GSHEET_USER::{slug}"
+
+def _meta_key_last_audit(slug: str) -> str:
+    return f"GSHEET_USER_LASTAUDIT::{slug}"
+
+def _open_sheet_by_ref(gc, ref: str):
+    ref = (ref or "").strip()
+    if not ref:
+        raise ValueError("Referencia vacía para Google Sheet.")
+    return gc.open_by_url(ref) if ref.startswith("http") else gc.open_by_key(ref)
+
+def _gs_open_or_create_user_book(username: str, prefix: str = "BK-"):
+    """Devuelve (sh, slug). Crea la hoja del usuario; si no puede, usa fallback (ID o URL)."""
+    gc = _gs_client()
+    slug = _slug_user(username)
+    key  = _meta_key_user_sheet(slug)
+    sheet_ref = str(get_meta(key, "")) or ""
+
+    try:
+        if sheet_ref:
+            try:
+                sh = _open_sheet_by_ref(gc, sheet_ref)
+            except Exception:
+                # El ID/URL guardado ya no sirve → crea una nueva y guarda el nuevo ID
+                sh = gc.create(f"{prefix}{slug}")
+                set_meta(key, sh.id)
+        else:
+            # Primera vez → crea y guarda ID
+            sh = gc.create(f"{prefix}{slug}")
+            set_meta(key, sh.id)
+
+    except Exception as e:
+        # Cuota llena o sin permiso para crear → usa fallback
+        fallback_ref = str(get_meta("GSHEET_BACKUP_ID", "")) or str(GSPREADSHEET_ID or "")
+        fallback_ref = fallback_ref.strip()
+
+        if not fallback_ref:
+            raise PermissionError(
+                "No hay hoja de respaldo configurada (GSHEET_BACKUP_ID ni GSPREADSHEET_ID)."
+            ) from e
+
+        try:
+            sh = _open_sheet_by_ref(gc, fallback_ref)
+        except Exception as ex:
+            sa = st.session_state.get("_gs_sa_email", "(service-account)") or "(service-account)"
+            raise PermissionError(
+                "No tengo permisos para abrir la hoja de respaldo configurada.\n\n"
+                f"Comparte esa hoja (ID/URL: {fallback_ref}) con el correo del Service Account "
+                f"**{sa}** como **Editor**."
+            ) from ex
+
+    return sh, slug
+
+def _ws(sh, name: str, rows=1000, cols=30):
+    import gspread
+    try:
+        return sh.worksheet(name)
+    except gspread.WorksheetNotFound:
+        return sh.add_worksheet(title=name, rows=rows, cols=cols)
+
+def _ws_write(ws, df: pd.DataFrame):
+    ws.clear()
+    if df is None or df.empty:
+        ws.update([["(vacío)"]], value_input_option="RAW")
+        return
+    values = [df.columns.tolist()] + df.astype(object).where(pd.notnull(df), "").values.tolist()
+    ws.update(values, value_input_option="USER_ENTERED")
+
+def backup_user_snapshot(username: str):
+    if not GOOGLE_SHEETS_ENABLED:
+        st.warning("Google Sheets está deshabilitado en Administración."); return
+
+    sh, slug = _gs_open_or_create_user_book(username)   # ← FALTABA
+
+    tablas = {
+        "Ventas":              _read_table_direct("transacciones"),
+        "Gastos":              _read_table_direct("gastos"),
+        "Prestamos":           _read_table_direct("prestamos"),
+        "Inventario":          _read_table_direct("inventario"),
+        "DeudoresIniciales":   _read_table_direct("deudores_ini"),
+        "Consolidado":         _read_table_direct("consolidado_diario"),
+    }
+
+    for nombre, df in tablas.items():
+        _ws_write(_ws(sh, nombre), df)
+
+    with get_conn() as conn:
+        df_a = pd.read_sql_query(
+            "SELECT id, ts, action, table_name AS tabla, row_id FROM audit_log WHERE user=? ORDER BY id DESC LIMIT 200",
+            conn, params=(username,)
+        )
+    _ws_write(_ws(sh, "Estado", rows=200, cols=10), df_a)
+
+    audit("user.backup.snapshot", extra={"user": username})
+
+def backup_user_flush_audit(username: str) -> int:
+    if not GOOGLE_SHEETS_ENABLED:
+        return 0
+
+    sh, slug = _gs_open_or_create_user_book(username)   # ← 2 valores
+    sheet_name = f"{slug}::Cambios"                     # ← usa prefijo siempre (evita choques en fallback)
+    ws = _ws(sh, sheet_name, rows=1000, cols=6)
+
+    last_id = int(get_meta(_meta_key_last_audit(slug), 0) or 0)
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, ts, user, action, table_name, row_id, details "
+            "FROM audit_log WHERE user=? AND id>? ORDER BY id ASC",
+            (username, last_id)
+        ).fetchall()
+    if not rows:
+        return 0
+
+    try:
+        size = len(ws.get_all_values() or [])
+    except Exception:
+        size = 0
+
+    payload = []
+    if size == 0:
+        payload.append(["id","ts","user","action","table","row_id","details"])
+    for r in rows:
+        payload.append([r[0], r[1], r[2], r[3], r[4], r[5], str(r[6] or "")])
+
+    ws.append_rows(payload, value_input_option="RAW")
+    set_meta(_meta_key_last_audit(slug), int(rows[-1][0]))
+    audit("user.backup.flush_audit", extra={"user": username, "pushed": len(rows)})
+    return len(rows)
+
 # =========================================================
 # Sidebar (login primero)
 # =========================================================
@@ -1960,76 +2544,6 @@ with st.sidebar:
         """, unsafe_allow_html=True)
         st.markdown(f'<div class="sb-logo"><img src="{_logo_uri}" alt="logo"></div>', unsafe_allow_html=True)
 
-    # --- Botón de menú compacto (debajo del logo)
-    # --- Menú "Mi Cuenta" (popover con fallback a expander) ---
-    if st.session_state.get("is_mobile", False):
-        mi_cuenta = st.expander("Mi cuenta", expanded=False)
-    else:
-        try:
-            mi_cuenta = st.popover("Mi Cuenta", use_container_width=True)
-        except Exception:
-            mi_cuenta = st.expander("Mi cuenta", expanded=False)
-
-    with mi_cuenta:
-        st.caption(f"Sesión: **{user}** · rol **{role}**")
-
-        if st.button("🚪 Cerrar sesión", use_container_width=True, key="btn_logout"):
-            audit("logout", extra={"user": user})
-            _clear_session()
-            st.success("Sesión cerrada. Volviendo al login…")
-            # da ~500ms para que el navegador actualice cookies y luego recarga
-            components.html(
-                "<script>setTimeout(()=>window.parent.location.reload(), 600)</script>",
-                height=0, width=0
-            )
-            st.stop()
-
-        if st.button("🔄 Reiniciar estado y caché"):
-            st.session_state.clear(); st.rerun()
-
-        if st.button("💾 Haz una copia de seguridad ahora"):
-            try:
-                p = make_db_backup()
-                set_meta("LAST_BACKUP_ISO", datetime.now().isoformat(timespec="seconds"))
-                finish_and_refresh(f"Backup creado: {p}")
-            except Exception as e:
-                st.error(f"No se pudo crear el backup: {e}")
-        
-        from pathlib import Path
-
-        st.markdown("---")
-        last_bkp = None
-        try:
-            BACKUP_DIR.mkdir(exist_ok=True, parents=True)
-            files = list(BACKUP_DIR.glob("finanzas_*.sqlite"))
-            if files:
-                last_bkp = max(files, key=lambda p: p.stat().st_mtime)
-        except Exception:
-            pass
-
-        if last_bkp:
-            with open(last_bkp, "rb") as f:
-                st.download_button(
-                    "⬇️ Descargar último backup",
-                    f.read(),
-                    file_name=last_bkp.name,
-                    mime="application/octet-stream",
-                    use_container_width=True
-                )
-
-        st.markdown("---")
-        st.markdown("**Mi cuenta**")
-
-        with st.form("SELF_pw_form", clear_on_submit=True):
-            newp = st.text_input("Nueva contraseña", type="password")
-            ok = st.form_submit_button("Cambiar mi contraseña")
-
-        if ok:
-            if not newp:
-                st.error("Escribe la nueva contraseña.")
-            else:
-                db_set_password(user, newp)
-                notify_ok("Tu contraseña fue actualizada.")
                 
 # Muestra badge (logo + usuario). Si tu archivo se llama distinto, pásalo:
 # show_user_badge(user, logo_path="assets/ticketo.png", warn_if_missing=True)
@@ -2092,8 +2606,9 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="ra
 # ÚNICO radio de navegación (key única y persistente)
 # Construye la lista de tabs (agrega Admin si aplica)
 tabs = [
+    
     "🧮 Diario Consolidado", "📊 Panel de control", "🧾 Ventas",
-    "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "⬆️ Importar/Exportar", "👤 Deudores"
+    "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "⬆️ Importar/Exportar", "👤 Deudores","⚙️ Mi Cuenta"
 ] + (["🛠️ Administración"] if is_admin() else [])
 
 # === Auto-compact y flag móvil por parámetros de URL ===
@@ -2114,6 +2629,10 @@ with st.sidebar:
     compact = st.toggle("🧩 Modo compacto", value=st.session_state.get("ui_compact", False), key="ui_compact")
     st.divider()  # opcional, solo para separar visualmente
 
+    if is_admin():
+        st.session_state.setdefault("admin_view_all", False)
+        st.session_state["admin_view_all"] = st.toggle("👁️ Ver todo (admin)", value=st.session_state["admin_view_all"])
+
     # Navegación
     st.radio(
         "Secciones",
@@ -2123,6 +2642,8 @@ with st.sidebar:
     )
 
 current = st.session_state["nav_left"]
+
+SHOW_QUICK_ACTIONS = False 
 
 # st.markdown("""
 # <style>
@@ -2169,70 +2690,6 @@ current = st.session_state["nav_left"]
 # }
 # </style>
 # """, unsafe_allow_html=True)
-
-components.html("""
-<script>
-(function(){
-  try{
-    if(!matchMedia('(max-width: 900px)').matches) return;
-    const doc = (window.parent || window).document;
-
-    function qs(s, r){ return (r||doc).querySelector(s); }
-
-    function ensureBurger(){
-      if(qs('#tt-burger')) return;
-      const b = doc.createElement('button'); b.id = 'tt-burger';
-      b.appendChild(doc.createElement('i'));
-      b.appendChild(doc.createElement('i'));
-      b.appendChild(doc.createElement('i'));
-      b.addEventListener('click', toggle);
-      doc.body.appendChild(b);
-    }
-
-    function ensureOverlay(){
-      if(qs('#tt-ov')) return;
-      const ov = doc.createElement('div'); ov.id='tt-ov';
-      ov.addEventListener('click', closeSB);
-      doc.body.appendChild(ov);
-    }
-    function removeOverlay(){ const ov = qs('#tt-ov'); if(ov) ov.remove(); }
-
-    function openSB(){
-      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
-      sb.setAttribute('data-tt-open','1'); ensureOverlay();
-    }
-    function closeSB(){
-      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
-      sb.removeAttribute('data-tt-open'); removeOverlay();
-    }
-    function toggle(){ const sb = qs("section[data-testid='stSidebar']");
-      if(!sb) return; (sb.getAttribute('data-tt-open')==='1') ? closeSB() : openSB();
-    }
-
-    // Cierra al elegir una opción del radio (menú)
-    function autoCloseOnRadio(){
-      const sb = qs("section[data-testid='stSidebar']"); if(!sb) return;
-      const rg = sb.querySelector("div[role='radiogroup']"); if(!rg) return;
-      rg.addEventListener('click', function(e){
-        if(e.target.closest('label')) setTimeout(closeSB, 60);
-      }, {capture:true});
-    }
-
-    // Inicializa tras cada render
-    let tries = 0;
-    const t = setInterval(function(){
-      const sb = qs("section[data-testid='stSidebar']");
-      if(sb){
-        sb.removeAttribute('data-tt-open'); // arranca oculta
-        ensureBurger();
-        autoCloseOnRadio();
-        clearInterval(t);
-      }else if(++tries > 40){ clearInterval(t); }
-    }, 80);
-  }catch(e){}
-})();
-</script>
-""", height=0, width=0)
 
 # ⬇️⬇️ NUEVO: CSS si está activo el modo compacto
 if st.session_state.get("ui_compact", False):
@@ -2282,7 +2739,6 @@ def _clean_title(raw: str) -> str:
 st.session_state.pop("logo_uri_cache", None)
 st.session_state.pop("logo_uri_sig", None)
 
-from pathlib import Path
 _show_logo_path = str(Path(__file__).parent / "logo.png")
 
 st.markdown("""
@@ -2307,13 +2763,6 @@ st.markdown("""
   details[data-testid="stExpander"] > summary{
     color: var(--text) !important;
   }
-
-  /* Header pegajoso */
-  .tt-titlebar{
-    background: var(--card-bg) !important;
-    border-bottom: 1px solid var(--card-border) !important;
-  }
-  .tt-titlebar .ttl{ color: var(--text) !important; }
 
   /* Pastillas del menú lateral (radio de la sidebar) */
   section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
@@ -2427,10 +2876,6 @@ st.markdown("""
   cursor: pointer;
 }
 
-/* Oculta el icono SVG original */
-[data-testid="stSidebarCollapseControl"] button svg,
-[data-testid="collapsedControl"] svg{ display:none !important; }
-
 /* 3 barras blancas centradas */
 [data-testid="stSidebarCollapseControl"] button::before,
 [data-testid="collapsedControl"]::before{
@@ -2474,21 +2919,434 @@ st.markdown("""
 
 st.markdown("""
 <style>
-/* En móvil ocultamos por completo el botón nativo de Streamlit */
-@media (max-width: 900px){
+/* === FIX FINAL: fuerza que el toggle de la sidebar exista y sea visible === */
+
+/* Móvil: NO lo ocultes (anula cualquier regla previa que lo esconda) */
+@media (max-width:900px){
+  [data-testid*="SidebarCollapse"],
+  [data-testid*="SidebarCollapse"] *,
   [data-testid="stSidebarCollapseControl"],
   [data-testid="stSidebarCollapseControl"] *,
   [data-testid="collapsedControl"]{
-    display:none !important;
-    visibility:hidden !important;
-    pointer-events:none !important;
+    display:flex !important;
+    visibility:visible !important;
+    pointer-events:auto !important;
+    opacity:1 !important;
   }
 }
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+/* FIX: colapsar wrappers vacíos que deja components.html cuando height=0 */
+/* Cubre varios contenedores de Streamlit y distintas formas en que se pinta el height */
+.block-container > div:has(> iframe[height="0"]:only-child),
+.block-container > div:has(> iframe[style*="height:0"]:only-child),
+[data-testid="stElementContainer"]:has(> iframe[height="0"]:only-child),
+div[data-testid="stIFrame"]:has(> iframe[height="0"]:only-child){
+  margin:0 !important;
+  padding:0 !important;
+  min-height:0 !important;
+  line-height:0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* ——— Anti-espacio arriba (versión que mantiene el toolbar) ——— */
+
+/* 0) Quita la banda de color */
+div[data-testid="stDecoration"]{ height:0 !important; }
+
+/* 1) Sin padding/margen arriba en el contenedor principal */
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stAppViewContainer"] > .main .block-container{
+  padding-top:0 !important;
+  margin-top:0 !important;
+}
+
+/* 3) H1/H2 al ras cuando son lo primero */
+.block-container h1:first-child,
+.block-container h2:first-child{ margin-top:0 !important; }
+
+/* 4) Si usas barra de título propia, que no agregue margen extra */
+.tt-titlebar{ margin-top:0 !important; top:0 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* Colapsa cualquier wrapper que contenga solo utilidades invisibles */
+.block-container > div:has(> style),
+.block-container > div:has(> iframe[height="0"]),
+.block-container > div:has(> iframe[style*="height:0"]),
+[data-testid="stElementContainer"]:has(> iframe[height="0"]),
+div[data-testid="stIFrame"]:has(> iframe[height="0"]){
+  margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+st.markdown("""
+<style>
+/* EXCEPCIÓN: el botón de abrir/cerrar sidebar SÍ recibe clics */
+div[data-testid="stToolbar"] [data-testid*="SidebarCollapse"],
+div[data-testid="stToolbar"] [data-testid="stSidebarCollapseControl"]{
+  pointer-events: auto !important;
+}
+
+/* 2) Forzar visibilidad/posición de la hamburguesa en todas las vistas */
+@media (min-width:901px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="collapsedControl"]{
+    position: fixed !important;
+    top: 12px !important; left: 12px !important;
+    display: flex !important; visibility: visible !important;
+    opacity: 1 !important; pointer-events: auto !important;
+    z-index: 4000 !important;
+  }
+  /* Deja espacio en el título para la hamburguesa */
+  .tt-titlebar{ padding-left:74px !important; }
+}
+@media (max-width:900px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="collapsedControl"]{
+    position: fixed !important;
+    top: 8px !important; left: 8px !important;
+    display: flex !important; visibility: visible !important;
+    opacity: 1 !important; pointer-events: auto !important;
+    z-index: 4000 !important;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+
+/* El toolbar NO bloquea clics, salvo excepción para el toggle */
+div[data-testid="stToolbar"]{
+  position:fixed !important; top:6px !important; right:8px !important;
+  left:auto !important; bottom:auto !important;
+  display:inline-flex !important; width:auto !important; height:auto !important;
+  background:transparent !important; box-shadow:none !important;
+  transform:none !important; z-index:1 !important; pointer-events:none !important;
+}
+div[data-testid="stToolbar"] [data-testid*="SidebarCollapse"]{
+  pointer-events:auto !important;
+}
+
+/* Fuerza visibilidad y saca el control del header para TODAS las variantes */
+[data-testid="stSidebarCollapseControl"],
+[data-testid="stSidebarCollapseControl"] > button,
+[data-testid="collapsedControl"]{
+  position:fixed !important;
+  top:12px !important; left:12px !important;
+  display:flex !important; visibility:visible !important; opacity:1 !important;
+  pointer-events:auto !important; z-index:4000 !important;
+}
+
+/* Estilo opcional (puedes quitarlo si quieres el look nativo) */
+[data-testid="stSidebarCollapseControl"],
+[data-testid="stSidebarCollapseControl"] > button,
+[data-testid="collapsedControl"]{
+  width:46px; height:46px; border-radius:999px; border:0;
+  background:linear-gradient(135deg,#f97316,#fb923c);
+  box-shadow:0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16);
+}
+[data-testid="stSidebarCollapseControl"] svg,
+[data-testid="stSidebarCollapseControl"] > button svg,
+[data-testid="collapsedControl"] svg{
+  width:22px; height:22px; display:block !important;   /* NO ocultes el SVG */
+}
+
+@media (max-width:900px){
+  [data-testid="stSidebarCollapseControl"],
+  [data-testid="stSidebarCollapseControl"] > button,
+  [data-testid="collapsedControl"]{ top:8px !important; left:8px !important; }
+  section[data-testid="stSidebar"]{ width:232px !important; min-width:232px !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style id="tt-restore-burger">
+/* 1) No ocultes el header: vuelve a su altura normal */
+header[data-testid="stHeader"]{
+  height:auto !important; min-height:unset !important;
+  padding:0 !important; border:0 !important; background:transparent !important;
+}
+
+/* 2) El toolbar vuelve a ser clicable y sin forzado de posición */
+div[data-testid="stToolbar"]{
+  position:static !important; width:auto !important; height:auto !important;
+  transform:none !important; box-shadow:none !important;
+  pointer-events:auto !important;
+}
+
+/* 3) Muestra y coloca SIEMPRE el toggle de la sidebar (hamburguesa) */
+[data-testid="stSidebarCollapseControl"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseControl"] > button{
+  display:flex !important; visibility:visible !important; opacity:1 !important;
+  pointer-events:auto !important;
+  position:fixed !important; top:12px !important; left:12px !important;
+  z-index:5000 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* ===== TÍTULO CENTRADO + ESTILO ELEGANTE ===== */
+
+/* La barra ocupa 3 columnas simétricas:
+   [espacio izq] [título] [espacio dcha] → el título queda centrado
+   aunque esté la hamburguesa a la izquierda. */
+.tt-titlebar{
+  position: sticky; top: 0; z-index: 1000;
+  margin: 6px 0 14px;
+  padding: 8px 12px;
+  display: grid; align-items: center;
+  grid-template-columns: 52px 1fr 52px;           /* móvil */
+  background: rgba(255,255,255,.86);
+  border-bottom: 1px solid rgba(120,120,135,.14);
+  backdrop-filter: saturate(160%) blur(6px);
+  -webkit-backdrop-filter: saturate(160%) blur(6px);
+}
+
+/* Escritorio: reserva ~ancho del botón/hamburguesa */
+@media (min-width: 901px){
+  .tt-titlebar{ grid-template-columns: 74px 1fr 74px; }
+}
+
+/* Pastilla del título */
+.tt-titlebar .ttl{
+  justify-self: center;                      /* centrado real */
+  display: inline-block;
+  padding: 8px 16px;
+  font-size: 18px; font-weight: 700; letter-spacing: .2px;
+  color: #111827;
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
+  border: 1px solid rgba(120,120,135,.18);
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.06);
+  line-height: 1.15 !important;
+}
+
+/* Subrayado sutil con degradado */
+.tt-titlebar .ttl::after{
+  content:"";
+  display:block;
+  height:2px; width:46px;
+  margin:6px auto 0;
+  background: linear-gradient(90deg,#6366f1,#f97316);
+  border-radius: 999px;
+  opacity: .9;
+}
+
+/* ——— Dark mode ——— */
+@media (prefers-color-scheme: dark){
+  .tt-titlebar{
+    background: rgba(11,15,25,.82);
+    border-bottom: 1px solid #1f2937;
+  }
+  .tt-titlebar .ttl{
+    color: #e5e7eb;
+    background: linear-gradient(180deg, rgba(17,24,39,.95), rgba(17,24,39,.78));
+    border-color: #1f2937;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+.tt-sticky-cta{
+  position: sticky;
+  bottom: 0;
+  z-index: 1200;
+  background: rgba(255,255,255,.95);
+  border-top: 1px solid rgba(120,120,135,.18);
+  backdrop-filter: saturate(160%) blur(6px);
+  -webkit-backdrop-filter: saturate(160%) blur(6px);
+  padding: 10px 12px;
+  margin-top: 8px;
+  /* sombra sutil */
+  box-shadow: 0 -6px 16px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){
+  .tt-sticky-cta{
+    background: rgba(11,15,25,.86);
+    border-top: 1px solid #1f2937;
+  }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* ====== ULTRA COMPACT ====== */
+
+/* Menos espacio vertical global entre bloques y columnas */
+[data-testid="stVerticalBlock"]{ gap:4px !important; row-gap:4px !important; }
+[data-testid="stHorizontalBlock"]{ column-gap:8px !important; row-gap:4px !important; }
+
+/* Inputs y selects más bajos y con menos padding */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stDateInput"] input,
+[data-baseweb="select"] > div{
+  min-height: 36px !important;
+  padding: 6px 10px !important;
+  border-radius: 8px !important;
+}
+
+/* Etiquetas de widgets más pegadas y un pelín más chicas */
+[data-testid="stWidgetLabel"]{
+  margin-bottom: 2px !important;
+  font-size: 12px !important;
+}
+
+/* Botones un poco más bajos y compactos */
+.stButton > button{
+  min-height: 36px !important;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+}
+
+/* Métricas con menos relleno */
+[data-testid="stMetric"]{
+  padding:10px 12px !important;
+}
+
+/* Tablas/DataFrames: filas con menos alto */
+[data-testid="stDataFrame"] table td,
+[data-testid="stDataFrame"] table th{
+  padding-top:6px !important;
+  padding-bottom:6px !important;
+}
+
+/* Grids y tarjetas propias más ceñidas */
+.mm-grid{ gap:8px !important; }
+.mm-card{ margin-top:8px !important; padding:12px !important; }
+.tt-grid{ gap:10px !important; }
+.tt-stat{ padding:12px !important; }
+
+/* Título: menos margen y padding */
+.tt-titlebar{ margin:4px 0 8px !important; padding:6px 10px !important; }
+.tt-titlebar .ttl{ padding:6px 12px !important; font-size:16px !important; }
+
+/* Menú lateral (pestañas) aún más angosto y con menos padding */
+section[data-testid="stSidebar"] div[role="radiogroup"]{ gap:6px !important; }
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
+  padding:8px 9px !important;
+  border-radius:10px !important;
+}
+
+/* Checkbox y radio un poco más pegados a su etiqueta */
+[data-testid="stCheckbox"] label, [role="radiogroup"] label{
+  gap:6px !important;
+}
+
+/* Formularios: quita aire arriba/abajo */
+form [data-testid="stVerticalBlock"]{ gap:4px !important; }
+</style>
+""", unsafe_allow_html=True)
+
+
 # Título siempre actualizado
 show_sticky_header(current, logo_path=_show_logo_path, show_brand_text=False)
+
+st.markdown("""
+<style id="typography-hierarchy-reset">
+/* ===== Variables para jerarquía de texto ===== */
+:root{
+  --h1: 24px;      /* desktop */
+  --h2: 20px;
+  --label: 12px;
+  --label-tracking: .06em;
+  --card-bg: var(--card);
+  --card-br: var(--border);
+}
+@media (max-width: 900px){
+  :root{
+    --h1: 22px;    /* móvil */
+    --h2: 18px;
+    --label: 11px;
+  }
+}
+
+/* ===== Titulares (una sola jerarquía) ===== */
+h1, .tt-titlebar .ttl{
+  font-size: var(--h1) !important;
+  font-weight: 600 !important;  /* semi-bold */
+  letter-spacing: .01em;
+  text-transform: none;
+}
+h2{
+  font-size: var(--h2) !important;
+  font-weight: 600 !important;
+  letter-spacing: .005em;
+}
+
+/* ===== Labels de widgets (inputs, selects, etc.) ===== */
+div[data-testid="stWidgetLabel"] label{
+  font-size: var(--label) !important;
+  letter-spacing: var(--label-tracking) !important;
+  font-weight: 500 !important;
+  color: var(--muted) !important;
+}
+
+/* ===== Unificar estilo de “card” (una sola estética, sin sombras fuertes) ===== */
+[data-testid="stMetric"],
+details[data-testid="stExpander"],
+.mm-card, .tt-card{
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-br) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;               /* sin sombras pesadas */
+}
+
+/* Quitar gradientes/relieves de icon pills y stats “tt-” */
+.tt-stat{
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-br) !important;
+  box-shadow: none !important;
+}
+.tt-stat .ic{
+  background: var(--pri) !important;        /* color liso */
+  box-shadow: none !important;
+}
+
+/* Titlebar más sobria y coherente con el resto */
+.tt-titlebar{
+  background: rgba(255,255,255,.92) !important;
+  border-bottom: 1px solid var(--card-br) !important;
+  box-shadow: none !important;
+}
+@media (prefers-color-scheme: dark){
+  .tt-titlebar{ background: rgba(11,15,25,.88) !important; }
+}
+
+/* Números “callout” sin negrita innecesaria */
+.mm-total{ font-weight: 400 !important; }
+
+/* Zebra más suave en tablas (o quítala del todo) */
+[data-testid="stDataFrame"] table tbody tr:nth-child(odd){
+  background: transparent !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 
 # --- POPUP DE MENÚ PARA MÓVIL (reemplaza la sidebar en pantallas chicas) ---
 # if st.session_state.get("is_mobile", False):
@@ -2539,50 +3397,6 @@ show_flash_if_any()
 # # Llamado (una sola vez tras el header)
 # quick_nav_mobile()
 
-with st.container():
-    a1, a2, a3 = st.columns([1,1,6])
-    with a1.popover("➕ Venta", use_container_width=True):
-        fv1, fv2 = st.columns(2)
-        q_fecha = fv1.date_input("Fecha", value=date.today(), max_value=date.today(), format="DD/MM/YYYY", key="QA_VTA_F")
-        q_cliente = fv2.text_input("Cliente", key="QA_VTA_C")
-        q_costo = currency_input("Costo", key="QA_VTA_COSTO")
-        q_venta = currency_input("Venta", key="QA_VTA_VENTA")
-        q_debe  = st.checkbox("DEBE", key="QA_VTA_DEBE")
-        q_obs   = st.selectbox("Observación", ["EFECTIVO","CUENTA",""], index=0, key="QA_VTA_OBS")
-        if st.button("Guardar venta rápida", type="primary", key="QA_VTA_SAVE"):
-            insert_venta({
-                'fecha': str(q_fecha), 'cliente_nombre': q_cliente,
-                'costo': float(q_costo), 'venta': float(q_venta),
-                'ganancia': max(0.0, float(q_venta - q_costo)),
-                'debe_flag': 1 if q_debe else 0, 'paga': '',
-                'abono1': 0.0, 'abono2': 0.0, 'observacion': q_obs
-            })
-
-            # 🔄 Limpiar widgets de venta rápida (incluye los *_txt de currency_input)
-            _reset_keys([
-                "QA_VTA_F", "QA_VTA_C", "QA_VTA_DEBE", "QA_VTA_OBS",
-                "QA_VTA_COSTO_txt", "QA_VTA_VENTA_txt"
-            ])
-            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
-            finish_and_refresh("Venta guardada ✅", ["transacciones"])
-
-    with a2.popover("➕ Gasto", use_container_width=True):
-        gg1, gg2 = st.columns(2)
-        qg_fecha = gg1.date_input("Fecha", value=date.today(), max_value=date.today(), format="DD/MM/YYYY", key="QA_GTO_F")
-        qg_conc  = gg2.text_input("Concepto", key="QA_GTO_C")
-        qg_val   = currency_input("Valor", key="QA_GTO_V", value=0.0)
-        qg_notas = st.text_input("Notas", key="QA_GTO_N")
-        if st.button("Guardar gasto rápido", type="primary", key="QA_GTO_SAVE"):
-            insert_gasto({'fecha': str(qg_fecha), 'concepto': qg_conc, 'valor': float(qg_val), 'notas': qg_notas})
-
-            # 🔄 Limpiar widgets de gasto rápido
-            _reset_keys([
-                "QA_GTO_F", "QA_GTO_C", "QA_GTO_N",
-                "QA_GTO_V_txt"
-            ])
-            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
-            finish_and_refresh("Gasto guardado ✅", ["gastos"])
-
 def show(section: str) -> bool:
     return current == section
 
@@ -2592,7 +3406,7 @@ def show(section: str) -> bool:
 # Diario consolidado
 # ---------------------------------------------------------
 if show("🧮 Diario Consolidado"):
-    v_df = read_ventas(); g_df = read_gastos(); p_df = read_prestamos(); i_df = read_inventario(); c_df = read_consolidado()
+    v_df = read_ventas(); g_df = read_gastos(); p_df = read_prestamos(); i_df = read_inventario()
 
     total_cuenta    = float(v_df.loc[v_df['observacion'].eq('CUENTA'),   'venta'].sum()) if not v_df.empty else 0.0
     total_efectivo  = float(v_df.loc[v_df['observacion'].eq('EFECTIVO'), 'venta'].sum()) if not v_df.empty else 0.0
@@ -2604,82 +3418,154 @@ if show("🧮 Diario Consolidado"):
     d_ini = read_deudores_ini()
     total_deudores_ini = float(d_ini['valor'].sum()) if not d_ini.empty else 0.0
 
-    # Ajuste visual para ventas efectivas
-    total_efectivo_mostrar = total_efectivo + ADJ_VENTAS_EFECTIVO
+    total_ventas  = float(total_cuenta + total_efectivo)
+    total_ganancia= float(v_df['ganancia'].sum()) if not v_df.empty else 0.0
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("TOTAL DE VENTAS CUENTA",   money(total_cuenta))
-    c2.metric("TOTAL DE VENTAS EFECTIVAS", money(total_efectivo_mostrar))
-    c3.metric("GASTOS TOTALES",           money(total_gastos))
+    # ===== Fila 1 =====
+    st.markdown('<div class="mm-grid">', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3, gap="small")
+    with c1: stat_min("Total ventas",   money(total_ventas),   "var(--pri)")
+    with c2: stat_min("Ganancia total", money(total_ganancia), "var(--accent)")
+    with c3: stat_min("Gastos totales", money(total_gastos),   "var(--border)")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    c4, c5, c6 = st.columns(3)
-    c4.metric("COSTOS TOTALES (desde C3)", money(total_costos))
-    c5.metric("TOTAL PRÉSTAMOS",           money(total_prestamos))
-    c6.metric("INVENTARIO TOTAL",          money(total_inventario))
+    # ===== Fila 2 =====
+    st.markdown('<div class="mm-grid">', unsafe_allow_html=True)
+    c4, c5, c6 = st.columns(3, gap="small"  )
+    with c4: stat_min("Costos totales",   money(total_costos),    "var(--border)")
+    with c5: stat_min("Total préstamos",  money(total_prestamos), "var(--pri)")
+    with c6: stat_min("Inventario total", money(total_inventario),"var(--border)")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.metric("TOTAL DEUDORES", money(total_deudores_ini))
-
+    # ===== Deudores =====
     corte_actual = get_corte_deudores()
-    _, uni_total = deudores_unificados(corte_actual)
+    _, nuevo_total = deudores_unificados(corte_actual)
+    st.markdown('<div class="mm-grid">', unsafe_allow_html=True)
+    d1, d2, _ = st.columns([1,1,1], gap="small")
+    with d1: stat_min("Total deudores (histórico)", money(total_deudores_ini), "var(--accent)")
+    with d2: stat_min(f"Deudores desde {corte_actual.strftime('%d/%m/%Y')}", money(nuevo_total), "var(--pri)")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    c7, c8 = st.columns(2)
-    c7.metric("DEUDORES NUEVOS (desde corte)", money(uni_total))
-    c8.metric("DEUDORES TOTAL (inicial + nuevos)", money(total_deudores_ini + uni_total))
+    # ===== Efectivo global (minimal) =====
+    st.markdown('<div class="mm-card">', unsafe_allow_html=True)
+    st.markdown("### Efectivo (manual)")
 
-    st.markdown("### EFECTIVO (manual)")
-    efectivo_ini, notas_ini = get_efectivo_global_now()
+    efectivo_ini, _ = get_efectivo_global_now()
     metric_box = st.empty()
     metric_box.metric("EFECTIVO", money(efectivo_ini))
 
-    colA, colB = st.columns([1, 2])
-    with colA:
-        CONS_efectivo = currency_input("Efectivo en caja", key="CONS_efectivo_input", value=float(efectivo_ini))
-    with colB:
-        CONS_notas = st.text_input("Notas", value=notas_ini, key="CONS_efectivo_notas")
+    # Layout 2:1 — izquierda: monto + guardar / derecha: confirmar + eliminar
+    colL, colR = st.columns([2, 1], gap="small")
 
-    colS, colD = st.columns([1, 1])
-    if colS.button("💾 Guardar / Reemplazar (global)", key="CONS_efectivo_save"):
-        upsert_consolidado("GLOBAL", float(CONS_efectivo), CONS_notas)
-        nuevo_ef, _ = get_efectivo_global_now()
-        metric_box.metric("EFECTIVO", money(nuevo_ef))
-        components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
-        finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
+    with colL:
+        CONS_efectivo = currency_input("Efectivo en caja", key="CONS_efectivo_input",
+                                    value=float(efectivo_ini))
+        if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True,
+                    key="CONS_efectivo_save"):
+            # Guardamos sin notas
+            upsert_consolidado("GLOBAL", float(CONS_efectivo), "")
+            nuevo_ef, _ = get_efectivo_global_now()
+            metric_box.metric("EFECTIVO", money(nuevo_ef))
+            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
+            finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
 
-    confirm_del = colD.checkbox("Confirmar eliminación", key="CONS_del_confirm")
-    if colD.button("🗑️ Eliminar efectivo (global)", disabled=not confirm_del, key="CONS_efectivo_delete"):
-        delete_consolidado("GLOBAL")
-        metric_box.metric("EFECTIVO", money(0.0))
-        finish_and_refresh("Efectivo (GLOBAL) eliminado.", ["consolidado_diario"])
+    with colR:
+        st.markdown("&nbsp;", unsafe_allow_html=True)  # pequeño espacio vertical
+        confirm_del = st.checkbox("Confirmar eliminación", key="CONS_del_confirm")
+        if st.button("🗑️ Eliminar efectivo (global)", use_container_width=True,
+                    disabled=not confirm_del, key="CONS_efectivo_delete"):
+            delete_consolidado("GLOBAL")
+            metric_box.metric("EFECTIVO", money(0.0))
+            finish_and_refresh("Efectivo (GLOBAL) eliminado.", ["consolidado_diario"])
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    total_capital = (
-        total_cuenta
-        + total_efectivo_mostrar
-        + total_prestamos
-        + total_inventario
-        + (total_deudores_ini + uni_total)
-        + efectivo_ini
-        - (total_gastos + total_costos)
+    # ===== Total de capital (minimal) =====
+    total_capital = float(nuevo_total + efectivo_ini + total_prestamos + total_inventario)
+    st.markdown(
+        f'''
+        <div class="mm-card">
+          <h4>Total de capital</h4>
+          <div class="mm-total">{money(total_capital)}</div>
+        </div>
+        ''',
+        unsafe_allow_html=True
     )
-    st.metric("TOTAL DE CAPITAL", money(total_capital))
-
 # ---------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------
 elif show("📊 Panel de control"):
     v = read_ventas(); g = read_gastos()
-    st.metric("Ventas registradas", len(v))
-    st.metric("Gastos registrados", len(g))
-    st.metric("Total VENTA", money(float(v['venta'].sum()) if not v.empty else 0.0))
+
+    c1, c2, c3 = st.columns(3, gap="small")
+    c1.metric("Ventas registradas", len(v))
+    c2.metric("Gastos registrados", len(g))
+    c3.metric("Total VENTA", money(float(v['venta'].sum()) if not v.empty else 0.0))
+
+    st.markdown("### Ventas por día")
+
+    if v.empty:
+        st.info("No hay ventas registradas.")
+    else:
+        # Selector de rango
+        rango = st.selectbox(
+            "Rango",
+            ["Últimos 30 días", "Últimos 90 días", "Año actual", "Todo"],
+            index=0,
+            key="DASH_rng"
+        )
+
+        dv = v.copy()
+        dv["fecha"] = pd.to_datetime(dv["fecha"], errors="coerce")
+        dv = dv.dropna(subset=["fecha"])
+        today = pd.Timestamp(date.today())
+
+        if rango == "Últimos 30 días":
+            start = today - pd.Timedelta(days=30)
+            dv = dv[dv["fecha"] >= start]
+        elif rango == "Últimos 90 días":
+            start = today - pd.Timedelta(days=90)
+            dv = dv[dv["fecha"] >= start]
+        elif rango == "Año actual":
+            start = pd.Timestamp(today.year, 1, 1)
+            dv = dv[(dv["fecha"] >= start) & (dv["fecha"] <= today)]
+        # "Todo" no filtra
+
+        # Serie diaria + media móvil 7d
+        serie = (
+            dv.groupby("fecha", as_index=False)["venta"]
+              .sum()
+              .sort_values("fecha")
+              .rename(columns={"venta": "Ventas"})
+        )
+        serie["Media 7d"] = serie["Ventas"].rolling(7, min_periods=1).mean()
+
+        st.line_chart(
+            serie.set_index("fecha")[["Ventas", "Media 7d"]],
+            use_container_width=True
+        )
+
+        # (Opcional) Breakdown por observación
+        with st.expander("Ver totales por observación"):
+            obs = (
+                dv.groupby("observacion", as_index=False)["venta"]
+                  .sum()
+                  .sort_values("venta", ascending=False)
+                  .rename(columns={"observacion": "Observación", "venta": "Ventas"})
+            )
+            if not obs.empty:
+                st.bar_chart(obs.set_index("Observación"), use_container_width=True)
+            else:
+                st.caption("Sin datos para este rango.")
 
 # ---------------------------------------------------------
 # Ventas
 # ---------------------------------------------------------
 elif show("🧾 Ventas"):
-    f1c1, f1c2 = st.columns(2)
+    f1c1, f1c2 = st.columns(2, gap="small")
     VTA_fecha = f1c1.date_input("Fecha", value=date.today(), max_value=date.today(), key="VTA_fecha_rt", format="DD/MM/YYYY")
     VTA_cliente = f1c2.text_input("Cliente", key="VTA_cliente_rt")
 
-    f2c1, f2c2, f2c3 = st.columns(3)
+    f2c1, f2c2, f2c3 = st.columns(3, gap="small")
     with f2c1:
         VTA_costo = currency_input("Costo", key="VTA_costo_rt", value=0.0)
     with f2c2:
@@ -2688,17 +3574,15 @@ elif show("🧾 Ventas"):
         VTA_gan_calc = max(0.0, float(VTA_venta - VTA_costo))
         st.text_input("Ganancia", value=money(VTA_gan_calc), disabled=True, key="VTA_ganancia_view_rt")
 
-    f3c1, f3c2 = st.columns(2)
+    f3c1, f3c2 = st.columns(2, gap="small")
     VTA_debe = f3c1.checkbox("DEBE", key="VTA_debe_rt")
     VTA_paga = f3c2.checkbox("PAGA (pagó hoy)", key="VTA_paga_rt")
 
-    f4c1, f4c2 = st.columns(2)
+    f4c1, f4c2 = st.columns(2, gap="small")
     with f4c1:
         VTA_ab1 = currency_input("Abono 1", key="VTA_ab1_rt", value=0.0)
     with f4c2:
         VTA_ab2 = currency_input("Abono 2", key="VTA_ab2_rt", value=0.0)
-
-    VTA_obs = st.selectbox("Observación", ["EFECTIVO","CUENTA",""], index=0, key="VTA_obs_rt")
 
     # Validaciones previas
     invalid_paga = bool(VTA_debe and VTA_paga and (float(VTA_ab1) + float(VTA_ab2) <= 0))
@@ -2706,6 +3590,8 @@ elif show("🧾 Ventas"):
         st.warning("Marcaste PAGA, pero no registraste abonos. Agrega Abono 1 y/o Abono 2.")
     if float(VTA_venta) < float(VTA_costo):
         st.warning("La venta es menor que el costo. ¿Seguro?")
+
+    obs_val = "CUENTA" if VTA_debe else "EFECTIVO"
 
     # Guardar
     if st.button("💾 Guardar venta", type="primary", key="VTA_submit_rt", disabled=invalid_paga):
@@ -2719,7 +3605,7 @@ elif show("🧾 Ventas"):
             'paga': 'X' if VTA_paga else '',
             'abono1': float(VTA_ab1),
             'abono2': float(VTA_ab2),
-            'observacion': VTA_obs,
+            'observacion': obs_val,
         })
 
         # 🔄 Limpiar widgets del formulario de Ventas
@@ -2744,15 +3630,26 @@ elif show("🧾 Ventas"):
             st.session_state["rng_ventas"] = st.session_state["ventas_last_rango"]
 
         # Filtro de búsqueda y rango
-        v = filtro_busqueda(v, ["cliente_nombre","observacion"], key="ventas")
-        st.session_state["ventas_last_text"]  = st.session_state.get("q_ventas", "")
-        st.session_state["ventas_last_rango"] = st.session_state.get("rng_ventas", None)
+        flt_key = "ventas"
+        v = filtro_busqueda(v, ["cliente_nombre","observacion"], key=flt_key)
+        st.session_state["ventas_last_text"]  = st.session_state.get(f"q_{flt_key}", "")
+        st.session_state["ventas_last_rango"] = st.session_state.get(f"rng_{flt_key}", None)
 
-        # Chips por observación
-        obs_sel = st.radio("Filtrar por observación", ["(todas)", "EFECTIVO", "CUENTA"],
-                           horizontal=True, key="ventas_obs")
-        if obs_sel != "(todas)":
-            v = v[v["observacion"] == obs_sel]
+        # === NUEVO: Filtro por cliente (multi-select con búsqueda) ===
+        clientes = (
+            v["cliente_nombre"]
+            .astype(str).str.strip()
+            .replace({"nan":"", "None":"", "": None})
+            .dropna()
+            .unique()
+            .tolist()
+        )
+        clientes = sorted(clientes)
+        cli_sel = st.multiselect("Filtrar por cliente(s)", options=clientes, key="ventas_cli")
+        if cli_sel:
+            patt = {c.strip().upper() for c in cli_sel}
+            v = v[v["cliente_nombre"].astype(str).str.strip().str.upper().isin(patt)]
+        # === FIN NUEVO ===
 
         # Export CSV del resultado filtrado
         st.download_button(
@@ -2776,9 +3673,9 @@ elif show("🧾 Ventas"):
         tot_ganancia = float(v_valid['ganancia'].sum())
         tot_ventas_mostrar = tot_ventas + ADJ_VENTAS_EFECTIVO
 
-        m1, m2, m3 = st.columns(3)
+        m1, m2, m3 = st.columns(3, gap="small")
         m1.metric("Costos totales",  money(tot_costos))
-        m2.metric("Ventas totales",  money(tot_ventas_mostrar))
+        m2.metric("Ventas totales", money(tot_ventas))
         m3.metric("Ganancia total",  money(tot_ganancia))
 
         with st.expander("🔍 Detalle de ventas por observación", expanded=False):
@@ -2788,7 +3685,6 @@ elif show("🧾 Ventas"):
             det = df_format_money(det, ["VENTA"])
             st.dataframe(det, use_container_width=True)
             st.caption(
-                f"Total sin ajuste: {money(float(v_valid['venta'].sum()))} | "
                 f"Con ajuste: {money(float(v_valid['venta'].sum()) + ADJ_VENTAS_EFECTIVO)}"
             )
 
@@ -2797,86 +3693,157 @@ elif show("🧾 Ventas"):
         v_show = df_format_money(v_show, ['costo','venta','ganancia','abono1','abono2'])
         st.dataframe(v_show, use_container_width=True)
 
-        with st.expander("✏️ Editar venta (abonos)", expanded=False):
-            vv = read_ventas()
-            if vv.empty:
-                st.info("No hay ventas para editar.")
-            else:
-                opts = vv.sort_values('fecha', ascending=False).copy()
-                opts['label'] = opts.apply(
-                    lambda r: (
-                        f"#{int(r['id'])} • {r['fecha']} • {str(r['cliente_nombre'])[:25]} • "
-                        f"{money(float(r['venta']))} • Ab1 {money(float(r['abono1']))} • Ab2 {money(float(r['abono2']))}"
-                    ),
-                    axis=1
-                )
-                choice = st.selectbox("Selecciona la venta a editar", opts['label'].tolist(), key="ED_VTA_sel")
+        # --- EDITOR: solo Abonos y PAGA editables, con formato ---
+        vv = v.sort_values('fecha', ascending=False).copy()
 
-                sel_id = int(choice.split("•")[0].strip().lstrip("#"))
-                row = vv.loc[vv["id"] == sel_id].iloc[0]
+        for c in ('abono1', 'abono2', 'venta'):
+            vv[c] = pd.to_numeric(vv[c], errors='coerce').fillna(0).astype(float)
 
-                st.caption(f"Cliente: **{row['cliente_nombre']}** · Fecha: **{row['fecha']}** · Venta: **{money(float(row['venta']))}**")
+        # === ACCIONES POR FILA (popover por fila) ============================
+        st.markdown("### Acciones por fila")
 
-                kpref = f"ED_VTA_{sel_id}"
-                c1, c2 = st.columns(2)
-                with c1:
-                    new_ab1 = currency_input("Abono 1", key=f"{kpref}_ab1", value=float(row["abono1"]))
-                with c2:
-                    new_ab2 = currency_input("Abono 2", key=f"{kpref}_ab2", value=float(row["abono2"]))
+        # Toma las columnas completas para edición
+        vv_full = vv.sort_values('fecha', ascending=False).copy()
 
-                total_abonos = float(new_ab1) + float(new_ab2)
-                st.write(f"**Abonos totales:** {money(total_abonos)}  / Venta: {money(float(row['venta']))}")
+        # (opcional) limita cuántas filas mostrar con acciones para no recargar la página
+        lim = st.number_input("Máx. filas a listar con acciones", 5, 200, value=50, step=5, key="ventas_row_actions_lim")
+        vv_act = vv_full.head(int(lim))
 
-                auto_paga = st.checkbox("Marcar PAGA automáticamente si Abono1+Abono2 ≥ Venta", value=True, key=f"{kpref}_auto_paga")
-                excede = total_abonos > float(row["venta"])
-                if excede:
-                    st.warning("Los abonos superan el valor de la venta. Verifica si es correcto.")
-                # Si quieres bloquear el guardado cuando excede, descomenta la siguiente línea:
-                # save_disabled = excede
-                save_disabled = False
+        # Tabla solo para ver (sin edición)
+        v_show_actions = vv_act[['id','fecha','cliente_nombre','observacion','costo','venta','ganancia','debe_flag','abono1','abono2']].copy()
+        v_show_actions = df_format_money(v_show_actions, ['costo','venta','ganancia','abono1','abono2'])
+        st.dataframe(v_show_actions, use_container_width=True, hide_index=True)
 
-                if st.button("💾 Guardar cambios", type="primary", disabled=save_disabled, key=f"{kpref}_save"):
-                    changes = {}
-                    if float(new_ab1) != float(row["abono1"]):
-                        changes["abono1"] = float(new_ab1)
-                    if float(new_ab2) != float(row["abono2"]):
-                        changes["abono2"] = float(new_ab2)
-                    if auto_paga and total_abonos >= float(row["venta"]):
-                        changes["paga"] = "X"  # mantiene tu convención de PAGA
+        st.divider()
+        st.markdown("#### Operar por fila (popover)")
 
-                    if not changes:
-                        st.info("No hay cambios para guardar.")
-                    else:
-                        ok = update_venta_fields(sel_id, **changes)
-                        if ok:
-                            finish_and_refresh(f"Venta #{sel_id} actualizada ✅", ["transacciones"])
-                        else:
-                            st.error("No se pudo actualizar la venta.")
+        for _, r in vv_act.iterrows():
+            rid = int(r['id'])
+            c1, c2 = st.columns([7,1], gap="small")
+            with c1:
+                tipo = 'DEBE' if int(r['debe_flag'])==1 else 'EFECTIVO'
+                st.caption(f"**#{rid}** {r['fecha']} · {r['cliente_nombre']} · {money(float(r['venta']))} · {tipo}")
 
-        with st.expander("🗑️ Eliminar venta", expanded=False):
-            vv = read_ventas()
-            if vv.empty:
-                st.info("No hay ventas para eliminar.")
-            else:
-                opts = vv.sort_values('fecha', ascending=False).copy()
-                opts['label'] = opts.apply(
-                    lambda r: f"#{int(r['id'])} • {r['fecha']} • {str(r['cliente_nombre'])[:25]} • "
-                              f"{money(float(r['venta']))} • {'DEBE' if int(r['debe_flag'])==1 else ''}",
-                    axis=1
-                )
-                choice = st.selectbox("Selecciona la venta a eliminar", opts['label'].tolist())
-                sel_id = int(choice.split("•")[0].strip().lstrip("#"))
-                confirm = st.checkbox("Confirmo eliminar esta venta")
-                if st.button("Eliminar venta", type="primary", disabled=not confirm):
-                    # ⚠️ Todo lo del modal DEBE ir dentro del with
-                    with st.modal("¿Eliminar definitivamente esta venta?"):
-                        st.write(choice)
-                        c1, c2 = st.columns(2)
-                        if c1.button("Sí, eliminar", type="primary", key="del_v_ok"):
-                            delete_venta_id(sel_id)
-                            finish_and_refresh(f"Venta #{sel_id} eliminada.", ["transacciones"])
-                        if c2.button("Cancelar", key="del_v_cancel"):
-                            st.rerun()
+            # Botón que abre popover con edición rápida
+            with c2:
+                with st.popover(f"⋯  #{rid}", use_container_width=True):
+                    st.markdown(f"**Venta #{rid}** — edición rápida")
+                    # Edición rápida (campos más usados)
+                    e_ab1 = st.number_input("Abono 1", min_value=0.0, value=float(_nz(r['abono1'])), step=100.0, key=f"pop_ab1_{rid}")
+                    e_ab2 = st.number_input("Abono 2", min_value=0.0, value=float(_nz(r['abono2'])), step=100.0, key=f"pop_ab2_{rid}")
+                    e_paga = st.checkbox("PAGA (pagó hoy)", value=str(r.get('paga','')).strip().upper()=='X', key=f"pop_paga_{rid}")
+
+                    # Acciones
+                    bcol1, bcol2, bcol3 = st.columns([1,1,2],gap="small")
+                    if bcol1.button("Guardar", key=f"pop_save_{rid}"):
+                        payload = {}
+                        if float(e_ab1) != float(_nz(r['abono1'])): payload['abono1'] = float(e_ab1)
+                        if float(e_ab2) != float(_nz(r['abono2'])): payload['abono2'] = float(e_ab2)
+                        if ('X' if e_paga else '') != str(r.get('paga','')).strip(): payload['paga'] = 'X' if e_paga else ''
+                        if payload:
+                            update_venta_fields(rid, **payload)
+                        finish_and_refresh(f"Venta #{rid} actualizada.", ["transacciones"])
+
+                    # Borrado con confirmación en el propio popover
+                    conf = bcol2.checkbox("Confirmar 🗑️", key=f"pop_conf_{rid}")
+                    if bcol2.button("Eliminar", disabled=not conf, key=f"pop_del_{rid}"):
+                        delete_venta_id(rid)
+                        finish_and_refresh(f"Venta #{rid} eliminada.", ["transacciones"])
+
+        # === FIN ACCIONES POR FILA (popover) =================================
+
+
+
+# ====== Editor en bloque (abonos / PAGA) ======
+# Base para edición masiva: solo columnas necesarias + bandera PAGA booleana
+        vv_editor = vv_full[['id','fecha','cliente_nombre','venta','abono1','abono2','paga']].copy()
+        vv_editor['PAGA'] = vv_editor['paga'].astype(str).str.strip().str.upper().eq('X')
+        vv_editor.drop(columns=['paga'], inplace=True)
+        vv_editor['🗑️ Eliminar'] = False
+
+        # Alinear índices con lo que devuelve data_editor (posición 0..n-1)
+        vv_editor = vv_editor.reset_index(drop=True)
+
+        edited = st.data_editor(
+            vv_editor,
+            key='ventas_editor',
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            column_order=["fecha","cliente_nombre","venta","abono1","abono2","PAGA","🗑️ Eliminar"],
+            column_config={
+                "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY", disabled=True),
+                "cliente_nombre": st.column_config.TextColumn("Cliente", disabled=True),
+                "venta": st.column_config.NumberColumn("Venta", format="$ %,d", disabled=True),
+                "abono1": st.column_config.NumberColumn("Abono 1", format="$ %,d", step=100, min_value=0),
+                "abono2": st.column_config.NumberColumn("Abono 2", format="$ %,d", step=100, min_value=0),
+                "PAGA": st.column_config.CheckboxColumn("PAGA"),
+                "🗑️ Eliminar": st.column_config.CheckboxColumn("Eliminar"),
+            }
+        )
+
+        # --- Barra CTA pegajosa cuando hay cambios en el editor ---
+        state_ventas_editor = st.session_state.get("ventas_editor", {})
+        edited_rows = (getattr(state_ventas_editor, "edited_rows", None) 
+                    or state_ventas_editor.get("edited_rows", {}))
+
+        # Marcados para eliminar (si usas la columna "🗑️ Eliminar")
+        to_delete_positions = edited.index[edited.get('🗑️ Eliminar', False) == True].tolist() if '🗑️ Eliminar' in edited.columns else []
+
+        # ¿Hay algo que guardar?
+        hay_cambios = bool(edited_rows or to_delete_positions)
+
+        if hay_cambios:
+            with st.container():
+                st.markdown('<div class="tt-sticky-cta">', unsafe_allow_html=True)
+                bL, bR = st.columns([1,1],gap="small")
+                # Guardar (usa la misma lógica que tu botón existente)
+                if bL.button("💾 Guardar cambios (arriba)", type="primary", key="VENTAS_save_sticky"):
+                    n_upd = 0
+                    for pos, changes in (edited_rows or {}).items():
+                        row_id = int(vv_editor.iloc[int(pos)]['id'])
+                        payload = {}
+                        if 'abono1' in changes: payload['abono1'] = _nz(changes['abono1'])
+                        if 'abono2' in changes: payload['abono2'] = _nz(changes['abono2'])
+                        if 'PAGA'   in changes: payload['paga']   = 'X' if bool(changes['PAGA']) else ''
+                        if payload:
+                            update_venta_fields(row_id, **payload); n_upd += 1
+                    for pos in to_delete_positions:
+                        rid = int(vv_editor.iloc[int(pos)]['id'])
+                        delete_venta_id(rid)
+                    finish_and_refresh(f"Ventas actualizadas: {n_upd}", ["transacciones"])
+
+                # Cancelar → limpia los edits del data_editor y recarga
+                if bR.button("Cancelar edición", key="VENTAS_cancel_sticky"):
+                    # vacía los cambios del editor
+                    st.session_state['ventas_editor'] = {}
+                    st.rerun()
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        cE, cD = st.columns(2, gap="small")
+
+        # if cE.button("💾 Guardar cambios", type="primary", key="VENTAS_save"):
+        #     n_upd = 0
+        #     st_state = st.session_state.get("ventas_editor", {})
+        #     edited_rows = getattr(st_state, "edited_rows", None) or st_state.get("edited_rows", {})
+
+        #     for pos, changes in (edited_rows or {}).items():
+        #         row_id = int(vv_editor.iloc[int(pos)]['id'])
+        #         payload = {}
+        #         if 'abono1' in changes: payload['abono1'] = _nz(changes['abono1'])
+        #         if 'abono2' in changes: payload['abono2'] = _nz(changes['abono2'])
+        #         if 'PAGA'   in changes: payload['paga']   = 'X' if bool(changes['PAGA']) else ''
+        #         if payload:
+        #             update_venta_fields(row_id, **payload); n_upd += 1
+
+        #     to_del = edited.index[edited['🗑️ Eliminar'] == True].tolist()
+        #     for pos in to_del:
+        #         rid = int(vv_editor.iloc[int(pos)]['id'])
+        #         delete_venta_id(rid)
+
+        #     finish_and_refresh(f"Ventas actualizadas: {n_upd}", ["transacciones"])
+
 # ---------------------------------------------------------
 # Gastos
 # ---------------------------------------------------------
@@ -2888,7 +3855,7 @@ elif show("💸 Gastos"):
     GTO_notas: str = ""
 
     with st.form(key="GTO_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns(2, gap="small")
         GTO_fecha = c1.date_input(
             "Fecha",
             value=date.today(),
@@ -2898,7 +3865,7 @@ elif show("💸 Gastos"):
         )
         GTO_conc  = c2.text_input("Concepto", key="GTO_concepto")
 
-        c3, c4 = st.columns(2)
+        c3, c4 = st.columns(2, gap="small")
         with c3:
             GTO_valor = currency_input("Valor", key="GTO_valor", value=0.0, in_form=True)
         with c4:
@@ -2948,37 +3915,61 @@ elif show("💸 Gastos"):
         g_show = df_format_money(g_show, ['valor'])
         st.dataframe(g_show, use_container_width=True)
 
-        with st.expander("🗑️ Eliminar gasto", expanded=False):
-            gg = read_gastos()
-            if gg.empty:
-                st.info("No hay gastos para eliminar.")
+        # === GASTOS: edición/borrado en línea ===
+        gg = g.sort_values('fecha', ascending=False).copy()
+        g_editor = gg[['id','fecha','concepto','valor','notas']].copy()
+        g_editor['🗑️ Eliminar'] = False
+
+        edited_g = st.data_editor(
+            g_editor,
+            key='gastos_editor',
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            column_order=["fecha","concepto","valor","notas","🗑️ Eliminar"],
+            column_config={
+                "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY", disabled=True),
+                "concepto": st.column_config.TextColumn("Concepto"),
+                "valor": st.column_config.NumberColumn("Valor", format="$ %,d", step=100),
+                "notas": st.column_config.TextColumn("Notas"),
+                "🗑️ Eliminar": st.column_config.CheckboxColumn("Eliminar"),
+            }
+        )
+
+        cg1, cg2 = st.columns(2, gap="small")
+
+        if cg1.button("💾 Guardar cambios", type="primary", key="GTO_inline_save"):
+            n_upd = 0
+            for i, row in edited_g.iterrows():
+                row_id = int(g_editor.loc[i, 'id'])
+                changes = {}
+                if str(row['concepto']).strip() != str(g_editor.loc[i,'concepto']).strip():
+                    changes['concepto'] = row['concepto']
+                if float(row['valor']) != float(g_editor.loc[i,'valor']):
+                    changes['valor'] = float(row['valor'])
+                if str(row['notas']).strip() != str(g_editor.loc[i,'notas']).strip():
+                    changes['notas'] = row['notas']
+                if changes:
+                    update_gasto_fields(row_id, **changes)
+                    n_upd += 1
+            finish_and_refresh(f"Gastos actualizados: {n_upd}", ["gastos"])
+
+        if cg2.button("🗑️ Eliminar seleccionados", type="primary", key="GTO_inline_del"):
+            idxs = edited_g.index[edited_g['🗑️ Eliminar'] == True].tolist()
+            ids = [int(g_editor.loc[i,'id']) for i in idxs]
+            if ids:
+                for rid in ids:
+                    delete_gasto_id(rid)
+                finish_and_refresh(f"Eliminados {len(ids)} gastos.", ["gastos"])
             else:
-                opts = gg.sort_values('fecha', ascending=False).copy()
-                opts['label'] = opts.apply(
-                    lambda r: f"#{int(r['id'])} • {r['fecha']} • {str(r['concepto'])[:40]} • "
-                              f"{money(float(r['valor']))}",
-                    axis=1
-                )
-                choice = st.selectbox("Selecciona el gasto a eliminar", opts['label'].tolist(), key="DEL_GTO_sel")
-                sel_id = int(choice.split("•")[0].strip().lstrip("#"))
-                confirm = st.checkbox("Confirmo eliminar este gasto", key="DEL_GTO_ok")
-                if st.button("Eliminar gasto", type="primary", disabled=not confirm, key="DEL_GTO_btn"):
-                    # ⚠️ Todo lo del modal DEBE ir dentro del with
-                    with st.modal("¿Eliminar definitivamente este gasto?"):
-                        st.write(choice)
-                        c1, c2 = st.columns(2)
-                        if c1.button("Sí, eliminar", type="primary", key="del_g_ok"):
-                            delete_gasto_id(sel_id)
-                            finish_and_refresh(f"Gasto #{sel_id} eliminado.", ["gastos"])
-                        if c2.button("Cancelar", key="del_g_cancel"):
-                            st.rerun()
+                st.info("Marca al menos una fila en ‘Eliminar’.")
 
 # ---------------------------------------------------------
 # Préstamos
 # ---------------------------------------------------------
 elif show("🤝 Préstamos"):
     with st.form(key="PRE_form",clear_on_submit=True):
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns(2, gap="small")
         PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
         with c2:
             PRE_valor  = currency_input("Valor", key="PRE_valor", value=0.0, in_form=True)
@@ -2995,29 +3986,57 @@ elif show("🤝 Préstamos"):
         p_show = df_format_money(p_show, ['valor'])
         st.dataframe(p_show, use_container_width=True)
 
-    with st.expander("🗑️ Eliminar préstamo", expanded=False):
-        pp = read_prestamos()
-        if pp.empty:
-            st.info("No hay préstamos para eliminar.")
-        else:
-            opts = pp.sort_values('id', ascending=False).copy()
-            opts['label'] = opts.apply(
-                lambda r: f"#{int(r['id'])} • {str(r['nombre'])[:30]} • {money(float(r['valor']))}",
-                axis=1
-            )
-            choice = st.selectbox("Selecciona el préstamo a eliminar", opts['label'].tolist(), key="DEL_PRE_sel")
-            sel_id = int(choice.split("•")[0].strip().lstrip("#"))
-            confirm = st.checkbox("Confirmo eliminar este préstamo", key="DEL_PRE_ok")
-            if st.button("Eliminar préstamo", type="primary", disabled=not confirm, key="DEL_PRE_btn"):
-                delete_prestamo_id(sel_id)
-                finish_and_refresh(f"Préstamo #{sel_id} eliminado.", ["prestamos"])
+    # === PRÉSTAMOS: edición/borrado en línea ===
+        pp = p.sort_values('id', ascending=False).copy()
+        p_editor = pp[['id','nombre','valor']].copy()
+        p_editor['🗑️ Eliminar'] = False
+
+        edited_p = st.data_editor(
+            p_editor,
+            key='prestamos_editor',
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            column_order=["nombre","valor","🗑️ Eliminar"],
+            column_config={
+                "nombre": st.column_config.TextColumn("Nombre"),
+                "valor": st.column_config.NumberColumn("Valor", format="$ %,d", step=100),
+                "🗑️ Eliminar": st.column_config.CheckboxColumn("Eliminar"),
+            }
+        )
+
+        cp1, cp2 = st.columns(2, gap="small")
+
+        if cp1.button("💾 Guardar cambios", type="primary", key="PRE_inline_save"):
+            n_upd = 0
+            for i, row in edited_p.iterrows():
+                row_id = int(p_editor.loc[i, 'id'])
+                changes = {}
+                if str(row['nombre']).strip() != str(p_editor.loc[i,'nombre']).strip():
+                    changes['nombre'] = row['nombre']
+                if float(row['valor']) != float(p_editor.loc[i,'valor']):
+                    changes['valor'] = float(row['valor'])
+                if changes:
+                    update_prestamo_fields(row_id, **changes)
+                    n_upd += 1
+            finish_and_refresh(f"Préstamos actualizados: {n_upd}", ["prestamos"])
+
+        if cp2.button("🗑️ Eliminar seleccionados", type="primary", key="PRE_inline_del"):
+            idxs = edited_p.index[edited_p['🗑️ Eliminar'] == True].tolist()
+            ids = [int(p_editor.loc[i,'id']) for i in idxs]
+            if ids:
+                for rid in ids:
+                    delete_prestamo_id(rid)
+                finish_and_refresh(f"Eliminados {len(ids)} préstamos.", ["prestamos"])
+            else:
+                st.info("Marca al menos una fila en ‘Eliminar’.")
 
 # ---------------------------------------------------------
 # Inventario
 # ---------------------------------------------------------
 elif show("📦 Inventario"):
     with st.form(key="INV_form",clear_on_submit=True):
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns(2, gap="small")
         INV_prod  = c1.text_input("Producto", key="INV_producto")
         with c2:
             INV_costo = currency_input("Valor costo", key="INV_valor_costo", value=0.0, in_form=True)
@@ -3035,79 +4054,68 @@ elif show("📦 Inventario"):
         i_show = df_format_money(i_show, ['valor_costo'])
         st.dataframe(i_show, use_container_width=True)
 
-    with st.expander("🗑️ Eliminar ítem de inventario", expanded=False):
-        ii = read_inventario()
-        if ii.empty:
-            st.info("No hay ítems de inventario para eliminar.")
-        else:
-            opts = ii.sort_values('id', ascending=False).copy()
-            opts['label'] = opts.apply(
-                lambda r: f"#{int(r['id'])} • {str(r['producto'])[:40]} • {money(float(r['valor_costo']))}",
-                axis=1
-            )
-            choice = st.selectbox("Selecciona el ítem a eliminar", opts['label'].tolist(), key="DEL_INV_sel")
-            sel_id = int(choice.split("•")[0].strip().lstrip("#"))
-            confirm = st.checkbox("Confirmo eliminar este ítem", key="DEL_INV_ok")
-            if st.button("Eliminar ítem", type="primary", disabled=not confirm, key="DEL_INV_btn"):
-                delete_inventario_id(sel_id)
-                finish_and_refresh(f"Ítem #{sel_id} eliminado.", ["inventario"])
+    # === INVENTARIO: edición/borrado en línea ===
+        ii = i.sort_values('id', ascending=False).copy()
+        i_editor = ii[['id','producto','valor_costo']].copy()
+        i_editor['🗑️ Eliminar'] = False
+
+        edited_i = st.data_editor(
+            i_editor,
+            key='inventario_editor',
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            column_order=["producto","valor_costo","🗑️ Eliminar"],
+            column_config={
+                "producto": st.column_config.TextColumn("Producto"),
+                "valor_costo": st.column_config.NumberColumn("Valor costo", format="$ %,d", step=100),
+                "🗑️ Eliminar": st.column_config.CheckboxColumn("Eliminar"),
+            }
+        )
+
+        ci1, ci2 = st.columns(2, gap="small")
+
+        if ci1.button("💾 Guardar cambios", type="primary", key="INV_inline_save"):
+            n_upd = 0
+            for irow, row in edited_i.iterrows():
+                row_id = int(i_editor.loc[irow, 'id'])
+                changes = {}
+                if str(row['producto']).strip() != str(i_editor.loc[irow,'producto']).strip():
+                    changes['producto'] = row['producto']
+                if float(row['valor_costo']) != float(i_editor.loc[irow,'valor_costo']):
+                    changes['valor_costo'] = float(row['valor_costo'])
+                if changes:
+                    update_inventario_fields(row_id, **changes)
+                    n_upd += 1
+            finish_and_refresh(f"Inventario actualizado: {n_upd}", ["inventario"])
+
+        if ci2.button("🗑️ Eliminar seleccionados", type="primary", key="INV_inline_del"):
+            idxs = edited_i.index[edited_i['🗑️ Eliminar'] == True].tolist()
+            ids = [int(i_editor.loc[i,'id']) for i in idxs]
+            if ids:
+                for rid in ids:
+                    delete_inventario_id(rid)
+                finish_and_refresh(f"Eliminados {len(ids)} ítems.", ["inventario"])
+            else:
+                st.info("Marca al menos una fila en ‘Eliminar’.")
 
 # ---------------------------------------------------------
 # Deudores
 # ---------------------------------------------------------
 elif show("👤 Deudores"):
-    d_ini = read_deudores_ini()
-    if d_ini.empty:
-        st.info("No hay saldos iniciales de deudores cargados. Importa tu Excel (Consolidado: columnas E/F).")
+    st.markdown("### Deudores")
+
+    df_deu, total_deu = deudores_sin_corte()
+    st.metric("Total por cobrar", money(total_deu))
+
+    if not df_deu.empty:
+        st.dataframe(
+            df_format_money(df_deu.copy(), ["NUEVO"]),
+            use_container_width=True,
+            hide_index=True  # si tu versión lo soporta
+        )
     else:
-        st.metric("Total por cobrar (Iniciales)", money(float(d_ini['valor'].sum())))
-        base = d_ini[['nombre','valor']].rename(columns={'nombre':'CLIENTE','valor':'SALDO'})
-        base_show = df_format_money(base, ['SALDO'])
-        st.dataframe(base_show.sort_values('SALDO', ascending=False), use_container_width=True)
-        st.caption("Tabla principal = saldos iniciales importados; no se modifican.")
-
-    corte_actual = get_corte_deudores()
-    with st.expander("⚙️ Fecha de corte para nuevos deudores (desde esta fecha se suman ventas a crédito)", expanded=False):
-        nueva_corte = st.date_input("Fecha de corte", value=corte_actual, max_value=date.today(), key="CFG_CORTE_DEUDORES", format="DD/MM/YYYY")
-        c1, c2 = st.columns(2)
-        if c1.button("Guardar corte", type="primary"):
-            set_corte_deudores(nueva_corte)
-            set_meta("CORTE_DEUDORES", str(nueva_corte))
-            finish_and_refresh(f"Corte guardado: {nueva_corte}")
-        c2.caption("Deja la fecha en HOY para empezar a sumar desde ahora.")
-
-    with st.expander("📊 Ver unificado (Iniciales + Ventas desde corte)", expanded=False):
-        uni_df, _ = deudores_unificados(corte_actual)
-        if not uni_df.empty:
-            for c in ["NUEVO","INICIAL","TOTAL"]:
-                uni_df[c] = pd.to_numeric(uni_df[c], errors="coerce").fillna(0.0)
-            total_unificado = float(uni_df["TOTAL"].sum())
-            total_nuevo = float(uni_df["NUEVO"].sum())
-        else:
-            total_unificado = 0.0; total_nuevo = 0.0
-
-        cA, cB = st.columns(2)
-        cA.metric("Total por cobrar (Unificado – solo NUEVO>0)", money(total_unificado))
-        cB.metric("NUEVO acumulado (desde el corte)", money(total_nuevo))
-
-        if not uni_df.empty:
-            uni_show = df_format_money(uni_df, ['NUEVO','INICIAL','TOTAL'])
-            st.dataframe(uni_show, use_container_width=True)
-        else:
-            st.write("Aún no hay nuevos saldos provenientes de Ventas desde la fecha de corte.")
-    with st.expander("🧪 ¿Qué ventas están generando 'NUEVO'?", expanded=True):
-        vdbg = read_ventas().copy()
-        if not vdbg.empty:
-            vdbg["CLIENTE"] = vdbg["cliente_nombre"].astype(str).str.strip().str.upper()
-            for c in ["venta","abono1","abono2","debe_flag"]:
-                vdbg[c] = pd.to_numeric(vdbg[c], errors="coerce").fillna(0.0)
-            vdbg = vdbg[(vdbg["fecha"] >= corte_actual) & (vdbg["debe_flag"] == 1)]
-            vdbg["SALDO_NUEVO"] = (vdbg["venta"] - (vdbg["abono1"] + vdbg["abono2"])).clip(lower=0.0)
-            cols = ["fecha","CLIENTE","observacion","venta","abono1","abono2","paga","SALDO_NUEVO"]
-            st.dataframe(vdbg[cols].sort_values(["CLIENTE","fecha"]), use_container_width=True)
-            st.caption(f"Filtrado por fecha ≥ {corte_actual} y DEBE=1")
-        else:
-            st.write("No hay ventas.")
+        st.info("No hay deudores pendientes.")
 
 # ---------------------------------------------------------
 # Importar/Exportar (Nuevo: todo en uno)
@@ -3119,161 +4127,279 @@ elif show("⬆️ Importar/Exportar"):
     if btn and up is not None:
         try:
             stats = import_excel_all(up, replace=replace)
-            resumen = ", ".join([f"{k}: {v}" for k, v in stats.items()])
-            finish_and_refresh(f"Importación completa ➜ {resumen}",
-                               tables_to_sync=["transacciones","gastos","prestamos","inventario","deudores_ini"])
+            msg = (f"Importado ✔️ — Ventas:{stats.get('ventas',0)} · Gastos:{stats.get('gastos',0)} · "
+                f"Préstamos:{stats.get('prestamos',0)} · Inventario:{stats.get('inventario',0)} · "
+                f"DeudoresIniciales:{stats.get('deudores_ini',0)}")
+            finish_and_refresh(msg, ["transacciones","gastos","prestamos","inventario","deudores_ini"])
         except Exception as e:
             st.error(f"Error importando: {e}")
 
+    st.divider()
+    st.markdown("### Exportar a Google Sheets (global)")
+
+    tablas_disponibles = list(GSHEET_MAP.keys())
+    sel = st.multiselect(
+        "Tablas a exportar",
+        options=tablas_disponibles,
+        default=tablas_disponibles,
+        help="Se crean/actualizan hojas con estos nombres en tu Spreadsheet."
+    )
+
+    col_a, col_b = st.columns([1,1], gap="small")
+    with col_a:
+        if st.button("⬆️ Sincronizar ahora", type="primary", disabled=not sel, key="sync_gs"):
+            sync_tables_to_gsheet(sel)
+            finish_and_refresh(f"Sincronizadas: {', '.join(sel)}")
+
+    with col_b:
+        sa = st.session_state.get("_gs_sa_email", None) or "—"
+        st.caption(f"Service Account: {sa}")
+        st.caption(f"Sheet ID/URL: {GSPREADSHEET_ID or '—'}")
+
+elif show("⚙️ Mi Cuenta"):
+    st.subheader("Mi Cuenta")
+    st.caption(f"Sesión: **{user}** · rol **{role}**")
+
+    c1, c2, c3 = st.columns(3, gap="small")
+    if c1.button("🚪 Cerrar sesión", use_container_width=True):
+        audit("logout", extra={"user": user}); _clear_session(); st.success("Sesión cerrada"); st.stop()
+    if c2.button("🔄 Reiniciar estado y caché", use_container_width=True):
+        st.session_state.clear(); st.rerun()
+    if c3.button("💾 Copia de seguridad local (sqlite)", use_container_width=True):
+        p = make_db_backup(); set_meta("LAST_BACKUP_ISO", datetime.now().isoformat(timespec="seconds"))
+        finish_and_refresh(f"Backup creado: {p}")
+
+    st.markdown("---")
+    with st.form("SELF_pw_form2", clear_on_submit=True):
+        newp = st.text_input("Nueva contraseña", type="password")
+        ok = st.form_submit_button("Cambiar mi contraseña")
+    if ok:
+        db_set_password(user, newp); notify_ok("Tu contraseña fue actualizada.")
+    
+    st.markdown("### Respaldo personal en Google Sheets")
+    cA, cB = st.columns(2, gap="small")
+
+    with cA:
+        if st.button("🔄 Actualizar CAMBIOS (incremental)", use_container_width=True, key="BK_u_flush"):
+            n = backup_user_flush_audit(user)
+            notify_ok(f"Respaldo actualizado. Cambios nuevos: {n}")
+
+    with cB:
+        if st.button("📦 Generar SNAPSHOT completo", use_container_width=True, key="BK_u_snap"):
+            backup_user_snapshot(user)
+            notify_ok("Snapshot completo escrito en tu hoja de respaldo.")
+
+    # Enlace a la hoja
+    try:
+        sh, _ = _gs_open_or_create_user_book(user)   # ahora la función ya no revienta
+        st.link_button("Abrir mi hoja en Google Sheets", sh.url, use_container_width=True)
+    except Exception as e:
+        st.warning(f"No se pudo abrir el enlace del respaldo: {e}")
+
 # ---------------------------------------------------------
-# Administración (solo admin)
+# Administración (solo admin) — Google Sheets en una columna
 # ---------------------------------------------------------
 if is_admin() and show("🛠️ Administración"):
-        c1, c2 = st.columns(2)
 
-        # Ajuste visual de ventas efectivas
-        adj_val = c1.number_input("Ajuste visual a Ventas Efectivas (+/-)", value=float(ADJ_VENTAS_EFECTIVO), step=100.0)
-        if c1.button("Guardar ajuste"):
-            set_meta("ADJ_VENTAS_EFECTIVO", float(adj_val))
-            finish_and_refresh("Ajuste visual actualizado.")
+    # -------- Google Sheets (una columna) --------
+    st.subheader("Google Sheets")
 
-        # Google Sheets ID editable
-        gs_id_val = c2.text_input("Google Sheet ID", value=GSPREADSHEET_ID)
-        if c2.button("Guardar Sheets ID"):
-            set_meta("GSHEET_ID", gs_id_val.strip())
-            finish_and_refresh("Google Sheet ID actualizado.")
+    gs_id_val = st.text_input("Google Sheet ID", value=GSPREADSHEET_ID, key="CFG_GSHEET_ID")
+    if st.button("Guardar Sheets ID", use_container_width=True, key="BTN_SAVE_GSID"):
+        set_meta("GSHEET_ID", gs_id_val.strip())
+        finish_and_refresh("Google Sheet ID actualizado.")
 
-        gs_enabled_ui = c2.toggle("Habilitar Google Sheets", value=GOOGLE_SHEETS_ENABLED, key="CFG_GSHEETS_ENABLED")
-        if c2.button("Guardar estado Sheets"):
-            set_meta("GSHEETS_ENABLED", 1 if gs_enabled_ui else 0)
-            finish_and_refresh("Estado de Google Sheets actualizado.")
+    gs_enabled_ui = st.toggle(
+        "Habilitar Google Sheets",
+        value=GOOGLE_SHEETS_ENABLED,
+        key="CFG_GSHEETS_ENABLED"
+    )
+    if st.button("Guardar estado Sheets", use_container_width=True, key="BTN_SAVE_GSSTATE"):
+        set_meta("GSHEETS_ENABLED", 1 if gs_enabled_ui else 0)
+        finish_and_refresh("Estado de Google Sheets actualizado.")
 
-        st.divider()
-        c3, c4, c5 = st.columns(3)
-        if c3.button("Sincronizar TODAS las tablas a Google Sheets"):
-            if not GOOGLE_SHEETS_ENABLED:
-                st.info("Sincronización deshabilitada en Admin → “Habilitar Google Sheets”.")
+    st.divider()
+
+    # -------- Acciones rápidas --------
+    c3, c4, c5 = st.columns(3, gap="small")
+    if c3.button("Sincronizar TODAS las tablas a Google Sheets", use_container_width=True):
+        if not GOOGLE_SHEETS_ENABLED:
+            st.info("Sincronización deshabilitada en Admin → “Habilitar Google Sheets”.")
+        else:
+            sync_tables_to_gsheet(list(GSHEET_MAP.keys()))
+            notify_ok("Sincronización enviada.")
+    if c4.button("Limpiar caché y recargar ahora", use_container_width=True):
+        st.cache_data.clear(); st.rerun()
+    if c5.button("Cerrar sesión (admin)", use_container_width=True):
+        _clear_session(); st.rerun()
+
+    st.divider()
+
+    # -------- Gestión de usuarios --------
+    with st.expander("➕ Crear usuario", expanded=False):
+        cu1, cu2, cu3 = st.columns(3, gap="small")
+        new_user = cu1.text_input("Usuario nuevo", key="USR_newname")
+        new_pass = cu2.text_input("Contraseña", type="password", key="USR_newpass")
+        new_role = cu3.selectbox("Rol", ["user", "admin"], key="USR_newrole")
+        if st.button("Crear usuario", key="USR_create_btn"):
+            if not new_user or not new_pass:
+                st.error("Usuario y contraseña son obligatorios.")
             else:
-                sync_tables_to_gsheet(list(GSHEET_MAP.keys()))
-                notify_ok("Sincronización enviada.")
-        if c4.button("Limpiar caché y recargar ahora"):
-            st.cache_data.clear(); st.rerun()
-        if c5.button("Cerrar sesión (admin)"):
-            _clear_session(); st.rerun()
-
-        st.divider()
-        # --- Gestión de usuarios ---
-        with st.expander("➕ Crear usuario", expanded=False):
-            cu1, cu2, cu3 = st.columns(3)
-            new_user = cu1.text_input("Usuario nuevo", key="USR_newname")
-            new_pass = cu2.text_input("Contraseña", type="password", key="USR_newpass")
-            new_role = cu3.selectbox("Rol", ["user", "admin"], key="USR_newrole")
-            if st.button("Crear usuario", key="USR_create_btn"):
-                if not new_user or not new_pass:
-                    st.error("Usuario y contraseña son obligatorios.")
-                else:
-                    try:
-                        db_create_user(new_user, new_pass, new_role)
-                        notify_ok(f"Usuario '{new_user}' creado.")
-                        st.cache_data.clear()
-                    except Exception as e:
-                        st.error(f"No se pudo crear: {e}")
-
-        with st.expander("🔑 Cambiar contraseña / rol", expanded=False):
-            dfu = db_list_users()
-            if dfu.empty:
-                st.info("No hay usuarios.")
-            else:
-                sel_user = st.selectbox("Usuario", dfu["username"].tolist(), key="USR_sel_change")
-                np1, np2 = st.columns(2)
-                new_pass2 = np1.text_input("Nueva contraseña", type="password", key="USR_newpass2")
-                if np1.button("Actualizar contraseña", key="USR_update_pwd"):
-                    if not new_pass2:
-                        st.error("Escribe la nueva contraseña.")
-                    else:
-                        db_set_password(sel_user, new_pass2)
-                        notify_ok("Contraseña actualizada.")
-
-                current_role = dfu.loc[dfu["username"]==sel_user,"role"].iloc[0]
-                new_role2 = np2.selectbox("Rol", ["user","admin"], index=0 if current_role=="user" else 1, key="USR_newrole2")
-                if np2.button("Actualizar rol", key="USR_update_role"):
-                    if sel_user == user and new_role2 != "admin":
-                        st.error("No puedes quitarte el rol admin a ti mismo.")
-                    else:
-                        db_set_role(sel_user, new_role2)
-                        notify_ok("Rol actualizado.")
-
-        with st.expander("🗂️ Lista de usuarios / eliminar", expanded=False):
-            dfu = db_list_users()
-            if dfu.empty:
-                st.info("No hay usuarios.")
-            else:
-                st.dataframe(dfu, use_container_width=True)
-                del_user = st.selectbox("Usuario a eliminar", dfu["username"].tolist(), key="USR_del_sel")
-                confirm_del_user = st.checkbox("Confirmo eliminar este usuario", key="USR_del_ok")
-                if st.button("Eliminar usuario", type="primary", disabled=not confirm_del_user, key="USR_del_btn"):
-                    if del_user == user:
-                        st.error("No puedes eliminar tu propia cuenta.")
-                    else:
-                        db_delete_user(del_user)
-                        notify_ok(f"Usuario '{del_user}' eliminado.")
-                        st.cache_data.clear()
-        with st.expander("📜 Auditoría", expanded=False):
-            # filtros
-            colf1, colf2, colf3 = st.columns([1,1,2])
-            rango = colf1.date_input("Rango", value=(date.today() - timedelta(days=30), date.today()), format="DD/MM/YYYY", key="AUD_rng")
-            usuario = colf2.text_input("Usuario contiene", key="AUD_user")
-            acc = colf3.text_input("Acción contiene (p.ej. insert, delete, login)", key="AUD_act")
-            tabla = st.text_input("Tabla contiene (p.ej. transacciones, gastos)", key="AUD_tbl")
-
-            limit = st.number_input("Máx. registros", min_value=100, max_value=10000, value=1000, step=100)
-
-            # consulta
-            q = "SELECT id, ts, user, action, table_name AS tabla, row_id, details FROM audit_log WHERE 1=1"
-            params = []
-            if isinstance(rango, tuple) and len(rango) == 2:
-                q += " AND date(ts) BETWEEN ? AND ?"
-                params += [str(rango[0]), str(rango[1])]
-            if usuario:
-                q += " AND user LIKE ?"
-                params.append(f"%{usuario.strip()}%")
-            if acc:
-                q += " AND action LIKE ?"
-                params.append(f"%{acc.strip()}%")
-            if tabla:
-                q += " AND table_name LIKE ?"
-                params.append(f"%{tabla.strip()}%")
-            q += " ORDER BY id DESC LIMIT ?"
-            params.append(int(limit))
-
-            with get_conn() as conn:
-                df_aud = pd.read_sql_query(q, conn, params=params)
-
-            # vista amigable (columna details truncada)
-            def _shorten(s, n=140):
                 try:
-                    s = str(s or "")
-                    return s if len(s) <= n else s[:n] + "…"
-                except Exception:
-                    return s
-            if not df_aud.empty:
-                df_aud_view = df_aud.copy()
-                df_aud_view["details"] = df_aud_view["details"].map(lambda x: _shorten(x, 200))
-                st.dataframe(df_aud_view, use_container_width=True, height=400)
-                # descarga
-                csv = df_aud.to_csv(index=False).encode("utf-8-sig")
-                st.download_button("⬇️ Exportar auditoría CSV", csv, file_name=f"audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                    db_create_user(new_user, new_pass, new_role)
+                    notify_ok(f"Usuario '{new_user}' creado.")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"No se pudo crear: {e}")
 
-                # purga opcional
-                colp1, colp2 = st.columns([1,3])
-                dias = colp1.number_input("Purgar > días", min_value=7, max_value=3650, value=180, step=30)
-                if colp2.button("🧹 Purgar registros anteriores a ese umbral"):
-                    with get_conn() as conn:
-                        conn.execute("DELETE FROM audit_log WHERE ts < datetime('now', ?)", (f"-{int(dias)} days",))
-                    audit("audit.purge", extra={"older_than_days": int(dias)})
-                    st.success(f"Auditoría purgada (> {int(dias)} días).")
-                    st.cache_data.clear(); st.rerun()
-            else:
-                st.info("Sin registros con los filtros actuales.")
+    with st.expander("🔑 Cambiar contraseña / rol", expanded=False):
+        dfu = db_list_users()
+        if dfu.empty:
+            st.info("No hay usuarios.")
+        else:
+            sel_user = st.selectbox("Usuario", dfu["username"].tolist(), key="USR_sel_change")
+            np1, np2 = st.columns(2, gap="small")
+            new_pass2 = np1.text_input("Nueva contraseña", type="password", key="USR_newpass2")
+            if np1.button("Actualizar contraseña", key="USR_update_pwd"):
+                if not new_pass2:
+                    st.error("Escribe la nueva contraseña.")
+                else:
+                    db_set_password(sel_user, new_pass2)
+                    notify_ok("Contraseña actualizada.")
 
+            current_role = dfu.loc[dfu["username"]==sel_user,"role"].iloc[0]
+            new_role2 = np2.selectbox("Rol", ["user","admin"],
+                                      index=0 if current_role=="user" else 1,
+                                      key="USR_newrole2")
+            if np2.button("Actualizar rol", key="USR_update_role"):
+                if sel_user == user and new_role2 != "admin":
+                    st.error("No puedes quitarte el rol admin a ti mismo.")
+                else:
+                    db_set_role(sel_user, new_role2)
+                    notify_ok("Rol actualizado.")
+
+    with st.expander("🗂️ Lista de usuarios / eliminar", expanded=False):
+        dfu = db_list_users()
+        if dfu.empty:
+            st.info("No hay usuarios.")
+        else:
+            st.dataframe(dfu, use_container_width=True)
+            del_user = st.selectbox("Usuario a eliminar", dfu["username"].tolist(), key="USR_del_sel")
+            confirm_del_user = st.checkbox("Confirmo eliminar este usuario", key="USR_del_ok")
+            if st.button("Eliminar usuario", type="primary", disabled=not confirm_del_user, key="USR_del_btn"):
+                if del_user == user:
+                    st.error("No puedes eliminar tu propia cuenta.")
+                else:
+                    db_delete_user(del_user)
+                    notify_ok(f"Usuario '{del_user}' eliminado.")
+                    st.cache_data.clear()
+
+    with st.expander("📜 Auditoría", expanded=False):
+        # filtros
+        colf1, colf2, colf3 = st.columns([1,1,2], gap="small")
+        rango = colf1.date_input(
+            "Rango",
+            value=(date.today() - timedelta(days=30), date.today()),
+            format="DD/MM/YYYY",
+            key="AUD_rng"
+        )
+        usuario = colf2.text_input("Usuario contiene", key="AUD_user")
+        acc = colf3.text_input("Acción contiene (p.ej. insert, delete, login)", key="AUD_act")
+        tabla = st.text_input("Tabla contiene (p.ej. transacciones, gastos)", key="AUD_tbl")
+
+        limit = st.number_input("Máx. registros", min_value=100, max_value=10000, value=1000, step=100)
+
+        # consulta
+        q = "SELECT id, ts, user, action, table_name AS tabla, row_id, details FROM audit_log WHERE 1=1"
+        params = []
+        if isinstance(rango, tuple) and len(rango) == 2:
+            q += " AND date(ts) BETWEEN ? AND ?"
+            params += [str(rango[0]), str(rango[1])]
+        if usuario:
+            q += " AND user LIKE ?"
+            params.append(f"%{usuario.strip()}%")
+        if acc:
+            q += " AND action LIKE ?"
+            params.append(f"%{acc.strip()}%")
+        if tabla:
+            q += " AND table_name LIKE ?"
+            params.append(f"%{tabla.strip()}%")
+        q += " ORDER BY id DESC LIMIT ?"
+        params.append(int(limit))
+
+        with get_conn() as conn:
+            df_aud = pd.read_sql_query(q, conn, params=params)
+
+        # vista amigable (columna details truncada)
+        def _shorten(s, n=140):
+            try:
+                s = str(s or "")
+                return s if len(s) <= n else s[:n] + "…"
+            except Exception:
+                return s
+
+        if not df_aud.empty:
+            df_aud_view = df_aud.copy()
+            df_aud_view["details"] = df_aud_view["details"].map(lambda x: _shorten(x, 200))
+            st.dataframe(df_aud_view, use_container_width=True, height=400)
+            # descarga
+            csv = df_aud.to_csv(index=False).encode("utf-8-sig")
+            st.download_button("⬇️ Exportar auditoría CSV", csv,
+                               file_name=f"audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+
+            # purga opcional
+            colp1, colp2 = st.columns([1,3], gap="small")
+            dias = colp1.number_input("Purgar > días", min_value=7, max_value=3650, value=180, step=30)
+            if colp2.button("🧹 Purgar registros anteriores a ese umbral"):
+                with get_conn() as conn:
+                    conn.execute("DELETE FROM audit_log WHERE ts < datetime('now', ?)", (f"-{int(dias)} days",))
+                audit("audit.purge", extra={"older_than_days": int(dias)})
+                st.success(f"Auditoría purgada (> {int(dias)} días).")
+                st.cache_data.clear(); st.rerun()
+        else:
+            st.info("Sin registros con los filtros actuales.")
+
+    with st.expander("🧹 Arrancar de cero (borrar TODOS los datos)", expanded=False):
+        st.warning(
+            "Esto vacía todas las tablas de negocio (ventas, gastos, préstamos, inventario, deudores, "
+            "consolidado y auditoría). Puedes conservar los usuarios si quieres."
+        )
+
+        keep_users = st.checkbox("Conservar usuarios (tabla users)", value=True)
+        disable_gs = st.checkbox("Desactivar Google Sheets antes de borrar (evita auto-restauración)", value=True)
+
+        conf = st.text_input("Escribe: BORRAR TODO", placeholder="BORRAR TODO")
+        ok = st.button("🧨 Borrar TODO", type="primary", disabled=(conf.strip().upper() != "BORRAR TODO"))
+
+        if ok:
+            try:
+                # 1) Desactiva Sheets para que no se restaure solo al estar vacía la BD
+                if disable_gs:
+                    set_meta("GSHEETS_ENABLED", 0)
+
+                # 2) Backup por si acaso
+                try:
+                    make_db_backup()
+                except Exception as _e:
+                    pass  # si falla el backup no bloqueamos el borrado
+
+                # 3) Vaciar tablas
+                with get_conn() as conn:
+                    tablas = [
+                        "transacciones","gastos","prestamos","inventario",
+                        "deudores_ini","consolidado_diario","audit_log"
+                    ]
+                    if not keep_users:
+                        tablas.append("users")
+                    for t in tablas:
+                        conn.execute(f"DELETE FROM {t}")
+                    conn.execute("DELETE FROM meta")  # limpia metadatos (incluye cortes/ajustes)
+
+                audit("db.wipe", extra={"keep_users": bool(keep_users)})
+
+                # 4) Limpia caché/estado y reinicia
+                st.session_state.clear()
+                finish_and_refresh("Base borrada. Empezamos de cero ✅")
+            except Exception as e:
+                st.error(f"No pude vaciar los datos: {e}")
 # ---------------------------------------------------------
