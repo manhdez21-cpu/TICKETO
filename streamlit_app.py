@@ -324,7 +324,9 @@ import math
 # ---------------------------------------------------------
 # Ajuste visual por defecto (se puede cambiar en Admin)
 # ---------------------------------------------------------
-DB_FILE = Path("finanzas.sqlite")
+DB_DIR  = Path(__file__).parent / "data"
+DB_DIR.mkdir(parents=True, exist_ok=True)
+DB_FILE = DB_DIR / "finanzas.sqlite"
 
 def _db_sig() -> tuple[int, int]:
     """Firma del archivo SQLite para invalidar la cache cuando cambie."""
@@ -2207,6 +2209,14 @@ def _gs_read_df(ws_title: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def _db_is_completely_empty() -> bool:
+    # Si hay al menos 1 usuario, considera la BD "no vacía"
+    users_count = 0
+    try:
+        with get_conn() as conn:
+            users_count = int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+    except Exception:
+        users_count = 0
+
     tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
     total = 0
     with get_conn() as conn:
@@ -2215,7 +2225,9 @@ def _db_is_completely_empty() -> bool:
                 total += int(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0])
             except Exception:
                 pass
-    return total == 0
+
+    # Solo considera "completamente vacía" si NO hay datos y NO hay usuarios.
+    return (total == 0) and (users_count == 0)
 
 def restore_from_gsheets_if_empty():
     if not GOOGLE_SHEETS_ENABLED or not GSPREADSHEET_ID:
@@ -2339,6 +2351,8 @@ def auto_backup_if_due():
 # Importación TODO-EN-UNO desde Excel
 # =========================================================
 def _truncate_tables(tables: list[str]):
+    # Seguridad: la tabla de usuarios jamás se toca aquí.
+    assert "users" not in tables, "Seguridad: no se puede truncar la tabla 'users'."
     with get_conn() as conn:
         for t in tables:
             conn.execute(f"DELETE FROM {t}")
