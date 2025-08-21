@@ -4015,34 +4015,40 @@ elif show("💸 Gastos"):
 # Préstamos
 # ---------------------------------------------------------
 elif show("🤝 Préstamos"):
-    # ---- Alta con form ----
+    # ---- Alta con form (una sola vez) ----
     with st.form("PRE_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
-        with c1:
-            PRE_nombre = st.text_input("Nombre", key="PRE_nombre")
+        PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
+        # IMPORTANTE: in_form=True y etiqueta única para evitar colisiones por aria-label
         with c2:
-            PRE_valor = currency_input("Valor", key="PRE_valor", value=0.0, in_form=True)
+            PRE_valor = currency_input("Valor (préstamo)", key="PRE_valor", value=0.0, in_form=True)
 
         PRE_submit = st.form_submit_button("💾 Guardar préstamo", use_container_width=True)
 
     if PRE_submit:
-        insert_prestamo({"nombre": PRE_nombre, "valor": float(PRE_valor)})
+        insert_prestamo({'nombre': PRE_nombre, 'valor': float(PRE_valor)})
+        # Limpia estado para próximo rerun
+        _reset_keys(["PRE_nombre", "PRE_valor", "PRE_valor_txt"])
         finish_and_refresh("Préstamo guardado", ["prestamos"])
 
     st.divider()
+
+    # ---- Listado / edición / borrado ----
     p = read_prestamos()
     if not p.empty:
-        # ---- Totales + tabla de vista ----
+        # Totales + tabla de vista
         st.metric("TOTAL PRÉSTAMOS", money(float(p['valor'].sum())))
         p_show = p.sort_values('id', ascending=False).copy()
         p_show = df_format_money(p_show, ['valor'])
         st.dataframe(p_show, use_container_width=True)
 
         # =========================================================
-        # === PRÉSTAMOS: edición/borrado en línea (tu bloque) ===
+        # === PRÉSTAMOS: edición/borrado en línea (editor)      ===
         # =========================================================
         pp = p.sort_values('id', ascending=False).copy()
-        p_editor = pp[['id','nombre','valor']].copy()
+
+        # Base para el editor (alineada al orden de 'pp')
+        p_editor = pp[['id', 'nombre', 'valor']].copy().reset_index(drop=True)
         p_editor['🗑️ Eliminar'] = False
 
         edited_p = st.data_editor(
@@ -4051,7 +4057,7 @@ elif show("🤝 Préstamos"):
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
-            column_order=["nombre","valor","🗑️ Eliminar"],
+            column_order=["nombre", "valor", "🗑️ Eliminar"],
             column_config={
                 "nombre": st.column_config.TextColumn("Nombre"),
                 "valor": st.column_config.NumberColumn("Valor", format="$ %,d", step=100),
@@ -4063,12 +4069,13 @@ elif show("🤝 Préstamos"):
 
         if cp1.button("💾 Guardar cambios", type="primary", key="PRE_inline_save"):
             n_upd = 0
+            # Usa 'pp.iloc[i]' (mismo orden) para comparar con el original
             for i, row in edited_p.iterrows():
-                row_id = int(p_editor.loc[i, 'id'])
+                row_id = int(pp.iloc[i]['id'])
                 changes = {}
-                if str(row['nombre']).strip() != str(p_editor.loc[i,'nombre']).strip():
+                if str(row['nombre']).strip() != str(pp.iloc[i]['nombre']).strip():
                     changes['nombre'] = row['nombre']
-                if float(row['valor']) != float(p_editor.loc[i,'valor']):
+                if float(row['valor']) != float(_nz(pp.iloc[i]['valor'])):
                     changes['valor'] = float(row['valor'])
                 if changes:
                     update_prestamo_fields(row_id, **changes)
@@ -4077,7 +4084,7 @@ elif show("🤝 Préstamos"):
 
         if cp2.button("🗑️ Eliminar seleccionados", type="primary", key="PRE_inline_del"):
             idxs = edited_p.index[edited_p['🗑️ Eliminar'] == True].tolist()
-            ids = [int(p_editor.loc[i,'id']) for i in idxs]
+            ids = [int(pp.iloc[i]['id']) for i in idxs]
             if ids:
                 for rid in ids:
                     delete_prestamo_id(rid)
@@ -4088,11 +4095,10 @@ elif show("🤝 Préstamos"):
         st.divider()
 
         # ===============================================
-        # === NUEVO: Acciones por fila → Eliminar rápido
+        # === Acciones por fila → Eliminar rápido      ===
         # ===============================================
         st.markdown("#### Acciones por fila (eliminar uno)")
 
-        # Para no saturar el DOM, limita cuántas filas muestran acciones
         lim = st.number_input("Máx. filas con acciones", 5, 200, value=50, step=5, key="pre_row_actions_lim")
         p_act = p.sort_values("id", ascending=False).head(int(lim))
 
@@ -4111,9 +4117,8 @@ elif show("🤝 Préstamos"):
                     st.caption("Cuando el préstamo esté pagado, puedes eliminar el registro.")
                     conf = st.checkbox("Confirmar eliminación", key=f"pre_conf_{rid}")
                     if st.button("🗑️ Eliminar", disabled=not conf, key=f"pre_del_{rid}"):
-                        delete_prestamo_id(rid)  # respeta owner/admin
+                        delete_prestamo_id(rid)
                         finish_and_refresh(f"Préstamo #{rid} eliminado.", ["prestamos"])
-
     else:
         st.info("No hay préstamos registrados.")
 
