@@ -2209,13 +2209,13 @@ def _gs_read_df(ws_title: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def _db_is_completely_empty() -> bool:
-    # Si hay al menos 1 usuario, considera la BD "no vacía"
-    users_count = 0
+    # Cuenta SOLO usuarios no-admin. Si solo existe el admin semilla, permitimos restaurar.
+    non_admin = 0
     try:
         with get_conn() as conn:
-            users_count = int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+            non_admin = int(conn.execute("SELECT COUNT(*) FROM users WHERE username != 'admin'").fetchone()[0])
     except Exception:
-        users_count = 0
+        non_admin = 0
 
     tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
     total = 0
@@ -2226,8 +2226,8 @@ def _db_is_completely_empty() -> bool:
             except Exception:
                 pass
 
-    # Solo considera "completamente vacía" si NO hay datos y NO hay usuarios.
-    return (total == 0) and (users_count == 0)
+    # Restaurar solo si NO hay datos y NO hay usuarios no-admin.
+    return (total == 0) and (non_admin == 0)
 
 def restore_from_gsheets_if_empty():
     if not GOOGLE_SHEETS_ENABLED or not GSPREADSHEET_ID:
@@ -2271,9 +2271,15 @@ def restore_from_gsheets_if_empty():
         df = _gs_read_df(GSHEET_MAP["consolidado_diario"])
         if not df.empty:
             for _, r in df.iterrows():
-                upsert_consolidado(str(r.get("fecha") or r.get("FECHA")), 
-                                   _to_float(r.get("efectivo") or r.get("EFECTIVO")), 
-                                   str(r.get("notas") or r.get("NOTAS") or ""))
+                raw_fecha = str(r.get("fecha") or r.get("FECHA") or "").strip()
+                if not raw_fecha:
+                    continue  # salta filas sin fecha
+                fecha_str = raw_fecha.upper() if raw_fecha.strip().upper() == "GLOBAL" else raw_fecha
+                upsert_consolidado(
+                    fecha_str,
+                    _to_float(r.get("efectivo") or r.get("EFECTIVO")),
+                    str(r.get("notas") or r.get("NOTAS") or "")
+                )
 
         # Deudores iniciales
         df = _gs_read_df(GSHEET_MAP["deudores_ini"])
@@ -2308,7 +2314,7 @@ restore_from_gsheets_if_empty()
 # =========================
 # Backups automáticos (SQLite)
 # =========================
-BACKUP_DIR = Path("backups")
+BACKUP_DIR = Path(__file__).parent / "backups"
 BACKUP_EVERY_HOURS = 8
 KEEP_BACKUPS = 40
 
