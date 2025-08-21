@@ -2857,41 +2857,41 @@ st.markdown("""
 
 st.markdown("""
 <style>
-/* ========= BOTÓN HAMBURGUESA — NARANJA ========= */
-[data-testid="stSidebarCollapseControl"] button,
-[data-testid="collapsedControl"]{
-  width: 46px !important;
-  height: 46px !important;
-  border-radius: 999px !important;
-  background: linear-gradient(135deg,#f97316,#fb923c) !important; /* 🟧 naranja → naranja claro */
-  border: 0 !important;
-  padding: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  position: relative !important;
-  box-shadow: 0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16) !important; /* sombras naranjas */
-  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
-  z-index: 2000 !important;
-  cursor: pointer;
-}
+# /* ========= BOTÓN HAMBURGUESA — NARANJA ========= */
+# [data-testid="stSidebarCollapseControl"] button,
+# [data-testid="collapsedControl"]{
+#   width: 46px !important;
+#   height: 46px !important;
+#   border-radius: 999px !important;
+#   background: linear-gradient(135deg,#f97316,#fb923c) !important; /* 🟧 naranja → naranja claro */
+#   border: 0 !important;
+#   padding: 0 !important;
+#   display: flex !important;
+#   align-items: center !important;
+#   justify-content: center !important;
+#   position: relative !important;
+#   box-shadow: 0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16) !important; /* sombras naranjas */
+#   transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+#   z-index: 2000 !important;
+#   cursor: pointer;
+# }
 
-/* 3 barras blancas centradas */
-[data-testid="stSidebarCollapseControl"] button::before,
-[data-testid="collapsedControl"]::before{
-  content:"";
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 22px; height: 2px;
-  background:#fff; border-radius: 2px;
-  box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
-}
+# /* 3 barras blancas centradas */
+# [data-testid="stSidebarCollapseControl"] button::before,
+# [data-testid="collapsedControl"]::before{
+#   content:"";
+#   position: absolute;
+#   top: 50%; left: 50%;
+#   transform: translate(-50%, -50%);
+#   width: 22px; height: 2px;
+#   background:#fff; border-radius: 2px;
+#   box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
+# }
 
-[data-testid="stSidebarCollapseControl"] button:hover,
-[data-testid="collapsedControl"]:hover{
-  transform: translateY(-1px) scale(1.04);
-}
+# [data-testid="stSidebarCollapseControl"] button:hover,
+# [data-testid="collapsedControl"]:hover{
+#   transform: translateY(-1px) scale(1.04);
+# }
 
 /* Efecto pulse cuando está colapsado — tono naranja */
 @keyframes tt-pulse {
@@ -2909,11 +2909,11 @@ st.markdown("""
     width: 232px !important;
     min-width: 232px !important;
   }
-  [data-testid="stSidebarCollapseControl"]{
-    top: 8px !important;
-    left: 8px !important;
-  }
-}
+#   [data-testid="stSidebarCollapseControl"]{
+#     top: 8px !important;
+#     left: 8px !important;
+#   }
+# }
 </style>
 """, unsafe_allow_html=True)
 
@@ -3081,22 +3081,22 @@ header[data-testid="stHeader"]{
   padding:0 !important; border:0 !important; background:transparent !important;
 }
 
-/* 2) El toolbar vuelve a ser clicable y sin forzado de posición */
-div[data-testid="stToolbar"]{
-  position:static !important; width:auto !important; height:auto !important;
-  transform:none !important; box-shadow:none !important;
-  pointer-events:auto !important;
-}
+# /* 2) El toolbar vuelve a ser clicable y sin forzado de posición */
+# div[data-testid="stToolbar"]{
+#   position:static !important; width:auto !important; height:auto !important;
+#   transform:none !important; box-shadow:none !important;
+#   pointer-events:auto !important;
+# }
 
-/* 3) Muestra y coloca SIEMPRE el toggle de la sidebar (hamburguesa) */
-[data-testid="stSidebarCollapseControl"],
-[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapseControl"] > button{
-  display:flex !important; visibility:visible !important; opacity:1 !important;
-  pointer-events:auto !important;
-  position:fixed !important; top:12px !important; left:12px !important;
-  z-index:5000 !important;
-}
+# /* 3) Muestra y coloca SIEMPRE el toggle de la sidebar (hamburguesa) */
+# [data-testid="stSidebarCollapseControl"],
+# [data-testid="collapsedControl"],
+# [data-testid="stSidebarCollapseControl"] > button{
+#   display:flex !important; visibility:visible !important; opacity:1 !important;
+#   pointer-events:auto !important;
+#   position:fixed !important; top:12px !important; left:12px !important;
+#   z-index:5000 !important;
+# }
 
 </style>
 """, unsafe_allow_html=True)
