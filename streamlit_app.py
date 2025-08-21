@@ -643,13 +643,17 @@ def ensure_indexes():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts      ON audit_log(ts)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_log(action)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_table   ON audit_log(table_name)")
-
-        # Índices por 'owner' solo si la columna existe (evita el error)
         for t in ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]:
             if _col_exists(conn, t, "owner"):
                 conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)")
                 if t == "transacciones":
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_trans_owner_id ON transacciones(owner, id)")
+
+        # 🔧 CLAVE: hace que ON CONFLICT(fecha, owner) funcione
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_consolidado_fecha_owner "
+            "ON consolidado_diario(fecha, owner)"
+        )
 
 init_db()
 migrate_add_owner_columns()
