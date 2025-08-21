@@ -1142,7 +1142,9 @@ def _parse_pesos(cell) -> float:
         # Heurística: si solo hay un tipo de separador, aparece varias veces y la cola es de 3 dígitos,
         # probablemente eran separadores de miles -> sin decimales.
         only_one_kind = (("," in s) ^ ("." in s))
-        if only_one_kind and s.count(dec_sep) > 1 and len(dec_part) == 3:
+        sep_count = s.count(dec_sep)
+        tail_len = len(dec_part)
+        if only_one_kind and (sep_count > 1 or tail_len >= 3):
             int_part = only_digits(s)
             dec_part = ""
 
@@ -1757,35 +1759,55 @@ def currency_input(label: str, key: str, value: float = 0.0,
         components.html(f"""
         <script>
         (function(){{
-          try{{
+        try{{
             const doc=(window.parent||window).document;
             const LABEL={json.dumps(label)};
             const STATE={json.dumps(state_key)};
             function groupDots(d){{ d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
-              let out='', c=0; for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0&&i>0) out='.'+out; }} return out; }}
+            let out='', c=0; for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0&&i>0) out='.'+out; }} return out; }}
             function normalize(s){{
-              s=(s||'').replace(/\\s+/g,''); const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'');
-              const dots=(s.match(/\\./g)||[]).length, commas=(s.match(/,/g)||[]).length;
-              const ld=s.lastIndexOf('.'), lc=s.lastIndexOf(',');
-              let head='', frac=''; if(dots||commas){{ const sep=(ld>lc)?'.':','; const parts=s.split(sep);
-                const tail=(parts[parts.length-1]||'').replace(/\\D/g,''); const sc= sep==='.'?dots:commas;
-                if(sc>1 && tail.length===3){{ head=s.replace(/\\D/g,''); }}
-                else if(tail.length>=1 && tail.length<=2){{ head=parts.slice(0,-1).join('').replace(/\\D/g,''); frac=tail.slice(0,2); }}
-                else {{ head=s.replace(/\\D/g,''); }}
-              }} else {{ head=s.replace(/\\D/g,''); }}
-              let out=groupDots(head)+(frac?(','+frac):''); if(neg && out!=='0') out='-'+out; return out;
+            s=(s||'').replace(/\\s+/g,'');
+            const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'');
+            const dots=(s.match(/\\./g)||[]).length, commas=(s.match(/,/g)||[]).length;
+            const ld=s.lastIndexOf('.'), lc=s.lastIndexOf(',');
+            let head='', frac='';
+            if(dots || commas){{
+                const sep   = (ld > lc) ? '.' : ',';
+                const parts = s.split(sep);
+                const tail  = (parts[parts.length-1]||'').replace(/\\D/g,'');
+                const sc    = (sep === '.') ? dots : commas;
+                const oneKind = ((dots > 0 && commas === 0) || (commas > 0 && dots === 0));
+
+                // Solo un tipo de separador y: aparece >1 vez o la "cola" tiene ≥3 dígitos
+                // => tratar como separadores de miles (sin decimales)
+                if(oneKind && (sc > 1 || tail.length >= 3)){{
+                head = s.replace(/\\D/g,'');
+                frac = '';
+                }} else if(tail.length >= 1 && tail.length <= 2){{
+                head = parts.slice(0,-1).join('').replace(/\\D/g,'');
+                frac = tail.slice(0,2);
+                }} else {{
+                head = s.replace(/\\D/g,'');
+                frac = '';
+                }}
+            }} else {{
+                head = s.replace(/\\D/g,'');
+            }}
+            let out = groupDots(head) + (frac ? (','+frac) : '');
+            if(neg && out!=='0') out='-'+out;
+            return out;
             }}
             function install(el){{
-              if(!el || el.dataset.ttMoneyInstalled===STATE) return;
-              el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
-              const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value){{ const a=(doc.activeElement===el); el.value=v; if(a) el.setSelectionRange(el.value.length, el.value.length); }} }};
-              el.addEventListener('input', ()=>setTimeout(fmt,0)); setTimeout(fmt,0);
+            if(!el || el.dataset.ttMoneyInstalled===STATE) return;
+            el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
+            const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value){{ const a=(doc.activeElement===el); el.value=v; if(a) el.setSelectionRange(el.value.length, el.value.length); }} }};
+            el.addEventListener('input', ()=>setTimeout(fmt,0)); setTimeout(fmt,0);
             }}
             let tries=0, t=setInterval(()=>{{
-              const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
-              if(el){{ clearInterval(t); install(el); }} else if(++tries>40) clearInterval(t);
+            const el=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].find(n=>n && n.dataset.ttMoneyInstalled!==STATE);
+            if(el){{ clearInterval(t); install(el); }} else if(++tries>40) clearInterval(t);
             }},80);
-          }}catch(e){{}}
+        }}catch(e){{}}
         }})();
         </script>
         """, height=0, width=0)
