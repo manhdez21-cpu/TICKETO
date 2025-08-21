@@ -2876,22 +2876,22 @@ st.markdown("""
 #   cursor: pointer;
 # }
 
-# /* 3 barras blancas centradas */
-# [data-testid="stSidebarCollapseControl"] button::before,
-# [data-testid="collapsedControl"]::before{
-#   content:"";
-#   position: absolute;
-#   top: 50%; left: 50%;
-#   transform: translate(-50%, -50%);
-#   width: 22px; height: 2px;
-#   background:#fff; border-radius: 2px;
-#   box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
-# }
+/* 3 barras blancas centradas */
+[data-testid="stSidebarCollapseControl"] button::before,
+[data-testid="collapsedControl"]::before{
+  content:"";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px; height: 2px;
+  background:#fff; border-radius: 2px;
+  box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
+}
 
-# [data-testid="stSidebarCollapseControl"] button:hover,
-# [data-testid="collapsedControl"]:hover{
-#   transform: translateY(-1px) scale(1.04);
-# }
+[data-testid="stSidebarCollapseControl"] button:hover,
+[data-testid="collapsedControl"]:hover{
+  transform: translateY(-1px) scale(1.04);
+}
 
 /* Efecto pulse cuando está colapsado — tono naranja */
 @keyframes tt-pulse {
@@ -2909,11 +2909,11 @@ st.markdown("""
     width: 232px !important;
     min-width: 232px !important;
   }
-#   [data-testid="stSidebarCollapseControl"]{
-#     top: 8px !important;
-#     left: 8px !important;
-#   }
-# }
+  [data-testid="stSidebarCollapseControl"]{
+    top: 8px !important;
+    left: 8px !important;
+  }
+}
 </style>
 """, unsafe_allow_html=True)
 
