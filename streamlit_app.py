@@ -3519,6 +3519,7 @@ def show(section: str) -> bool:
 if show("🧮 Diario Consolidado"):
     v_df = read_ventas(); g_df = read_gastos(); p_df = read_prestamos(); i_df = read_inventario()
 
+    total_cuenta    = float(v_df.loc[v_df['observacion'].eq('CUENTA'),   'venta'].sum()) if not v_df.empty else 0.0
     total_efectivo  = float(v_df.loc[v_df['observacion'].eq('EFECTIVO'), 'venta'].sum()) if not v_df.empty else 0.0
     total_gastos    = float(g_df['valor'].sum()) if not g_df.empty else 0.0
     total_costos    = float(v_df['costo'].sum()) if not v_df.empty else 0.0
@@ -3528,7 +3529,7 @@ if show("🧮 Diario Consolidado"):
     d_ini = read_deudores_ini()
     total_deudores_ini = float(d_ini['valor'].sum()) if not d_ini.empty else 0.0
 
-    total_ventas  = float(total_efectivo)
+    total_ventas  = float(total_cuenta + total_efectivo)
     total_ganancia= float(v_df['ganancia'].sum()) if not v_df.empty else 0.0
 
     # ===== Fila 1 =====
