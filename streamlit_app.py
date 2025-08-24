@@ -3553,8 +3553,7 @@ if show("🧮 Diario Consolidado"):
     _, nuevo_total = deudores_unificados(corte_actual)
     st.markdown('<div class="mm-grid">', unsafe_allow_html=True)
     d1, d2, _ = st.columns([1,1,1], gap="small")
-    with d1: stat_min("Total deudores (histórico)", money(total_deudores_ini), "var(--accent)")
-    with d2: stat_min(f"Deudores desde {corte_actual.strftime('%d/%m/%Y')}", money(nuevo_total), "var(--pri)")
+    with d2: stat_min(f"Deudores desde", money(nuevo_total), "var(--pri)")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ===== Efectivo global (minimal) =====
@@ -3747,85 +3746,74 @@ elif show("🧾 Ventas"):
 
         for _, r in v_page.iterrows():
             rid = int(r["id"])
+            c1, c2, c3, c4, c5 = st.columns([1.2, 2.2, 1, 1, 1.8], gap="small")  # c5: Acciones
 
-            c1, c2, c3, c4, c5 = st.columns([1.2, 2.2, 1, 1, 1.8], gap="small")  # c5 = Acciones (más ancho)
-
-            # ----- columnas de datos -----
             with c1:
-                # Muestra fecha formateada si viene como string
                 try:
                     f = pd.to_datetime(r["fecha"], errors="coerce").date()
                     st.write(f.strftime("%d/%m/%Y") if pd.notna(f) else "")
                 except Exception:
                     st.write(str(r["fecha"] or ""))
-            with c2: st.write(str(r["cliente_nombre"] or "").strip())
-            with c3: st.write(str(r["observacion"] or "").strip())
-            with c4: st.write(money(_to_float(r["venta"])))
+            with c2: st.write(str(r.get("cliente_nombre","")).strip())
+            with c3: st.write(str(r.get("observacion","")).strip())
+            with c4: st.write(money(_to_float(r.get("venta",0))))
 
-            # ----- Acciones: Editar | Eliminar (lado a lado) -----
             with c5:
-                a1, a2 = st.columns([1, 1], gap="small")
+                a1, a2 = st.columns([1,1], gap="small")  # ← un solo nivel de columnas
 
-                # === EDITAR ===
+                # ========== EDITAR ==========
                 with a1:
                     pop = open_action_panel("✏️ Editar", key=f"pop_edit_{rid}")
                     with pop:
-                        # valores actuales seguros
-                        _fecha = pd.to_datetime(r["fecha"], errors="coerce").date() if r.get("fecha") else date.today()
+                        # valores actuales
+                        _fecha   = pd.to_datetime(r.get("fecha"), errors="coerce").date() if r.get("fecha") else date.today()
                         _cliente = str(r.get("cliente_nombre") or "").strip()
-                        _costo = _to_float(r.get("costo"))
-                        _venta = _to_float(r.get("venta"))
-                        _ab1   = _to_float(r.get("abono1"))
-                        _ab2   = _to_float(r.get("abono2"))
-                        _pagaB = str(r.get("paga") or "").strip().upper() == "X"
-                        _debeB = int(r.get("debe_flag") or 0) == 1
-                        _obs   = (str(r.get("observacion") or "").strip().upper() or ("CUENTA" if _debeB else "EFECTIVO"))
+                        _costo   = _to_float(r.get("costo"))
+                        _venta   = _to_float(r.get("venta"))
+                        _ab1     = _to_float(r.get("abono1"))
+                        _ab2     = _to_float(r.get("abono2"))
+                        _pagaB   = (str(r.get("paga") or "").strip().upper() == "X")
+                        _debeB   = int(r.get("debe_flag") or 0) == 1
+                        _obs     = (str(r.get("observacion") or "").strip().upper()) or ("CUENTA" if _debeB else "EFECTIVO")
 
-                        c_ed1, c_ed2 = st.columns(2, gap="small")
-                        with c_ed1:
+                        with st.form(key=f"edit_form_{rid}", clear_on_submit=False):
                             fecha_i   = st.date_input("Fecha", value=_fecha, format="DD/MM/YYYY", key=f"e_fecha_{rid}")
-                            costo_i   = currency_input("Costo", key=f"e_costo_{rid}", value=_costo)
-                            ab1_i     = currency_input("Abono 1", key=f"e_ab1_{rid}", value=_ab1)
-                            debe_i    = st.checkbox("DEBE", value=_debeB, key=f"e_debe_{rid}")
-                        with c_ed2:
                             cliente_i = st.text_input("Cliente", value=_cliente, key=f"e_cliente_{rid}")
-                            venta_i   = currency_input("Venta", key=f"e_venta_{rid}", value=_venta)
-                            ab2_i     = currency_input("Abono 2", key=f"e_ab2_{rid}", value=_ab2)
+                            costo_i   = currency_input("Costo", key=f"e_costo_{rid}", value=_costo, in_form=True)
+                            venta_i   = currency_input("Venta", key=f"e_venta_{rid}", value=_venta, in_form=True)
+                            ab1_i     = currency_input("Abono 1", key=f"e_ab1_{rid}", value=_ab1, in_form=True)
+                            ab2_i     = currency_input("Abono 2", key=f"e_ab2_{rid}", value=_ab2, in_form=True)
+                            debe_i    = st.checkbox("DEBE", value=_debeB, key=f"e_debe_{rid}")
                             paga_i    = st.checkbox("PAGA (pagó hoy)", value=_pagaB, key=f"e_paga_{rid}")
+                            obs_i     = st.selectbox("Observación", ["EFECTIVO","CUENTA"],
+                                                    index=(1 if _obs=="CUENTA" else 0), key=f"e_obs_{rid}")
 
-                        obs_i = st.selectbox(
-                            "Observación",
-                            ["EFECTIVO", "CUENTA"],
-                            index=(1 if (_obs == "CUENTA") else 0),
-                            key=f"e_obs_{rid}"
-                        )
+                            gan_calc  = max(0.0, float(venta_i) - float(costo_i))
+                            st.caption(f"Ganancia sugerida: {money(gan_calc)}")
 
-                        # Ganancia sugerida (no editable)
-                        st.caption(f"Ganancia sugerida: {money(max(0.0, float(venta_i) - float(costo_i)))}")
+                            ok = st.form_submit_button("💾 Guardar cambios", type="primary")
+                            if ok:
+                                update_venta_fields(
+                                    rid,
+                                    fecha=fecha_i,
+                                    cliente_nombre=cliente_i,
+                                    costo=float(costo_i),
+                                    venta=float(venta_i),
+                                    ganancia=float(gan_calc),
+                                    debe_flag=1 if bool(debe_i) else 0,
+                                    paga="X" if bool(paga_i) else "",
+                                    abono1=float(ab1_i),
+                                    abono2=float(ab2_i),
+                                    observacion=str(obs_i).strip().upper(),
+                                )
+                                finish_and_refresh("Venta actualizada", ["transacciones"])
 
-                        if st.button("💾 Guardar cambios", type="primary", key=f"e_save_{rid}"):
-                            changes = {
-                                "fecha": fecha_i,
-                                "cliente_nombre": cliente_i,
-                                "costo": float(costo_i),
-                                "venta": float(venta_i),
-                                "ganancia": max(0.0, float(venta_i) - float(costo_i)),
-                                "debe_flag": 1 if bool(debe_i) else 0,
-                                "paga": "X" if bool(paga_i) else "",
-                                "abono1": float(ab1_i),
-                                "abono2": float(ab2_i),
-                                "observacion": str(obs_i).strip().upper(),
-                            }
-                            update_venta_fields(rid, **changes)
-                            finish_and_refresh("Venta actualizada", ["transacciones"])
-
-                # === ELIMINAR ===
+                # ========== ELIMINAR ==========
                 with a2:
                     popd = open_action_panel("🗑️ Eliminar", key=f"pop_del_{rid}")
                     with popd:
                         st.warning("Esta acción eliminará la venta definitivamente.")
                         conf = st.checkbox("Confirmar eliminación", key=f"del_conf_{rid}")
-                        st.write("")  # pequeño espacio
                         if st.button("Eliminar", type="primary", disabled=not conf, key=f"del_btn_{rid}"):
                             delete_venta_id(rid)
                             finish_and_refresh("Venta eliminada", ["transacciones"])
