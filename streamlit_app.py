@@ -3747,85 +3747,88 @@ elif show("🧾 Ventas"):
 
         for _, r in v_page.iterrows():
             rid = int(r["id"])
-            c1, c2, c3, c4, c5 = st.columns([1.1, 2.5, 1.2, 1.2, 2], gap="small")
 
-            # Datos de la fila
+            c1, c2, c3, c4, c5 = st.columns([1.2, 2.2, 1, 1, 1.8], gap="small")  # c5 = Acciones (más ancho)
+
+            # ----- columnas de datos -----
             with c1:
-                f = r["fecha"]
-                st.write(f.strftime("%d/%m/%Y") if isinstance(f, date) else str(f))
-            with c2:
-                st.write(str(r["cliente_nombre"]).strip() or "—")
-            with c3:
-                st.write((str(r["observacion"]) or "—"))
-            with c4:
-                st.write(money(_nz(r["venta"])))
+                # Muestra fecha formateada si viene como string
+                try:
+                    f = pd.to_datetime(r["fecha"], errors="coerce").date()
+                    st.write(f.strftime("%d/%m/%Y") if pd.notna(f) else "")
+                except Exception:
+                    st.write(str(r["fecha"] or ""))
+            with c2: st.write(str(r["cliente_nombre"] or "").strip())
+            with c3: st.write(str(r["observacion"] or "").strip())
+            with c4: st.write(money(_to_float(r["venta"])))
 
-            # Acciones
+            # ----- Acciones: Editar | Eliminar (lado a lado) -----
             with c5:
-                # --- EDITAR ---
-                pop  = open_action_panel("✏️ Editar",   key=f"pop_edit_{rid}")
-                with pop:
-                    ef1, ef2 = st.columns(2, gap="small")
-                    fecha_new = ef1.date_input("Fecha",
-                        value=r["fecha"] if isinstance(r["fecha"], date) else date.today(),
-                        format="DD/MM/YYYY", key=f"edit_fecha_{rid}")
-                    cliente_new = ef2.text_input("Cliente", value=str(r["cliente_nombre"] or ""), key=f"edit_cliente_{rid}")
+                a1, a2 = st.columns([1, 1], gap="small")
 
-                    n1, n2 = st.columns(2, gap="small")
-                    costo_new = currency_input("Costo", key=f"edit_costo_{rid}", value=_nz(r["costo"]))
-                    venta_new = currency_input("Venta", key=f"edit_venta_{rid}", value=_nz(r["venta"]))
+                # === EDITAR ===
+                with a1:
+                    pop = open_action_panel("✏️ Editar", key=f"pop_edit_{rid}")
+                    with pop:
+                        # valores actuales seguros
+                        _fecha = pd.to_datetime(r["fecha"], errors="coerce").date() if r.get("fecha") else date.today()
+                        _cliente = str(r.get("cliente_nombre") or "").strip()
+                        _costo = _to_float(r.get("costo"))
+                        _venta = _to_float(r.get("venta"))
+                        _ab1   = _to_float(r.get("abono1"))
+                        _ab2   = _to_float(r.get("abono2"))
+                        _pagaB = str(r.get("paga") or "").strip().upper() == "X"
+                        _debeB = int(r.get("debe_flag") or 0) == 1
+                        _obs   = (str(r.get("observacion") or "").strip().upper() or ("CUENTA" if _debeB else "EFECTIVO"))
 
-                    ganancia_calc = max(0.0, float(venta_new - costo_new))
-                    st.text_input("Ganancia", value=money(ganancia_calc), disabled=True, key=f"edit_gan_view_{rid}")
+                        c_ed1, c_ed2 = st.columns(2, gap="small")
+                        with c_ed1:
+                            fecha_i   = st.date_input("Fecha", value=_fecha, format="DD/MM/YYYY", key=f"e_fecha_{rid}")
+                            costo_i   = currency_input("Costo", key=f"e_costo_{rid}", value=_costo)
+                            ab1_i     = currency_input("Abono 1", key=f"e_ab1_{rid}", value=_ab1)
+                            debe_i    = st.checkbox("DEBE", value=_debeB, key=f"e_debe_{rid}")
+                        with c_ed2:
+                            cliente_i = st.text_input("Cliente", value=_cliente, key=f"e_cliente_{rid}")
+                            venta_i   = currency_input("Venta", key=f"e_venta_{rid}", value=_venta)
+                            ab2_i     = currency_input("Abono 2", key=f"e_ab2_{rid}", value=_ab2)
+                            paga_i    = st.checkbox("PAGA (pagó hoy)", value=_pagaB, key=f"e_paga_{rid}")
 
-                    b1, b2, b3 = st.columns(3, gap="small")
-                    debe_new = b1.checkbox("DEBE", value=bool(int(r.get("debe_flag") or 0)), key=f"edit_debe_{rid}")
-                    paga_new = b2.checkbox("PAGA", value=bool(str(r.get("paga") or "").strip()), key=f"edit_paga_{rid}")
+                        obs_i = st.selectbox(
+                            "Observación",
+                            ["EFECTIVO", "CUENTA"],
+                            index=(1 if (_obs == "CUENTA") else 0),
+                            key=f"e_obs_{rid}"
+                        )
 
-                    obs_actual = str(r.get("observacion") or "").upper()
-                    opciones_obs = ["EFECTIVO", "CUENTA", ""]
-                    try:
-                        idx_obs = opciones_obs.index(obs_actual) if obs_actual in opciones_obs else 0
-                    except Exception:
-                        idx_obs = 0
-                    obs_new = b3.selectbox("Observación", options=opciones_obs, index=idx_obs, key=f"edit_obs_{rid}")
+                        # Ganancia sugerida (no editable)
+                        st.caption(f"Ganancia sugerida: {money(max(0.0, float(venta_i) - float(costo_i)))}")
 
-                    a1, a2 = st.columns(2, gap="small")
-                    ab1_new = currency_input("Abono 1", key=f"edit_ab1_{rid}", value=_nz(r["abono1"]))
-                    ab2_new = currency_input("Abono 2", key=f"edit_ab2_{rid}", value=_nz(r["abono2"]))
+                        if st.button("💾 Guardar cambios", type="primary", key=f"e_save_{rid}"):
+                            changes = {
+                                "fecha": fecha_i,
+                                "cliente_nombre": cliente_i,
+                                "costo": float(costo_i),
+                                "venta": float(venta_i),
+                                "ganancia": max(0.0, float(venta_i) - float(costo_i)),
+                                "debe_flag": 1 if bool(debe_i) else 0,
+                                "paga": "X" if bool(paga_i) else "",
+                                "abono1": float(ab1_i),
+                                "abono2": float(ab2_i),
+                                "observacion": str(obs_i).strip().upper(),
+                            }
+                            update_venta_fields(rid, **changes)
+                            finish_and_refresh("Venta actualizada", ["transacciones"])
 
-                    if st.button("Guardar cambios", type="primary", key=f"edit_save_{rid}"):
-                        # Validaciones mínimas
-                        if not str(cliente_new).strip():
-                            st.warning("El cliente no puede estar vacío.")
-                        elif float(venta_new) <= 0:
-                            st.warning("La venta debe ser mayor que 0.")
-                        else:
-                            ok = update_venta_fields(
-                                rid,
-                                fecha=str(fecha_new),
-                                cliente_nombre=cliente_new,
-                                costo=float(costo_new),
-                                venta=float(venta_new),
-                                ganancia=float(ganancia_calc),
-                                debe_flag=1 if debe_new else 0,
-                                paga=("X" if paga_new else ""),
-                                abono1=float(ab1_new),
-                                abono2=float(ab2_new),
-                                observacion=str(obs_new or ("CUENTA" if debe_new else "EFECTIVO")),
-                            )
-                            if ok:
-                                finish_and_refresh("Venta actualizada", ["transacciones"])
-                            else:
-                                st.error("No se pudo actualizar (¿permisos o fila no encontrada?).")
-
-                # --- ELIMINAR ---
-                popd = open_action_panel("🗑️ Eliminar", key=f"pop_del_{rid}")
-                with popd:
-                    st.warning("¿Eliminar esta venta? Esta acción no se puede deshacer.")
-                    if st.button("Confirmar eliminación", key=f"del_btn_{rid}"):
-                        delete_venta_id(rid)
-                        finish_and_refresh("Venta eliminada", ["transacciones"])
+                # === ELIMINAR ===
+                with a2:
+                    popd = open_action_panel("🗑️ Eliminar", key=f"pop_del_{rid}")
+                    with popd:
+                        st.warning("Esta acción eliminará la venta definitivamente.")
+                        conf = st.checkbox("Confirmar eliminación", key=f"del_conf_{rid}")
+                        st.write("")  # pequeño espacio
+                        if st.button("Eliminar", type="primary", disabled=not conf, key=f"del_btn_{rid}"):
+                            delete_venta_id(rid)
+                            finish_and_refresh("Venta eliminada", ["transacciones"])
 
     else:
         st.info("No hay ventas registradas aún.")
@@ -4137,31 +4140,6 @@ elif show("🤝 Préstamos"):
 
         st.divider()
 
-        # ===============================================
-        # === Acciones por fila → Eliminar rápido      ===
-        # ===============================================
-        st.markdown("#### Acciones por fila (eliminar uno)")
-
-        lim = st.number_input("Máx. filas con acciones", 5, 200, value=50, step=5, key="pre_row_actions_lim")
-        p_act = p.sort_values("id", ascending=False).head(int(lim))
-
-        for _, r in p_act.iterrows():
-            rid = int(r["id"])
-            nombre = str(r["nombre"])
-            val = float(_nz(r["valor"]))
-
-            cL, cR = st.columns([7, 1], gap="small")
-            with cL:
-                st.caption(f"**#{rid}** · {nombre} · {money(val)}")
-
-            with cR:
-                with st.popover(f"⋯  #{rid}", use_container_width=True):
-                    st.markdown(f"**Préstamo #{rid}**")
-                    st.caption("Cuando el préstamo esté pagado, puedes eliminar el registro.")
-                    conf = st.checkbox("Confirmar eliminación", key=f"pre_conf_{rid}")
-                    if st.button("🗑️ Eliminar", disabled=not conf, key=f"pre_del_{rid}"):
-                        delete_prestamo_id(rid)
-                        finish_and_refresh(f"Préstamo #{rid} eliminado.", ["prestamos"])
     else:
         st.info("No hay préstamos registrados.")
 
