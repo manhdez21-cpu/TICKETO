@@ -2682,7 +2682,7 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="ra
 tabs = [
     
     "🧮 Diario Consolidado", "🧾 Ventas",
-    "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "⬆️ Importar/Exportar", "👤 Deudores","⚙️ Mi Cuenta"
+    "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "👤 Deudores", "⬆️ Importar/Exportar", "⚙️ Mi Cuenta"
 ] + (["🛠️ Administración"] if is_admin() else [])
 
 # === Auto-compact y flag móvil por parámetros de URL ===
@@ -3651,7 +3651,7 @@ elif show("🧾 Ventas"):
 
     st.divider()
 
-    # ===== Listado (SIN acciones por fila) =====
+    # ===== Listado (CON acciones por fila) =====
     v = read_ventas()
     if not v.empty:
         # Precargar último estado de filtros (opcional)
@@ -3660,7 +3660,7 @@ elif show("🧾 Ventas"):
         if "rng_ventas" not in st.session_state and "ventas_last_rango" in st.session_state:
             st.session_state["rng_ventas"] = st.session_state["ventas_last_rango"]
 
-        # Filtro de búsqueda y rango
+        # Filtros de búsqueda y rango
         flt_key = "ventas"
         v = filtro_busqueda(v, ["cliente_nombre","observacion"], key=flt_key)
         st.session_state["ventas_last_text"]  = st.session_state.get(f"q_{flt_key}", "")
@@ -3686,41 +3686,129 @@ elif show("🧾 Ventas"):
             use_container_width=True
         )
 
-        # Métricas
+        # Métricas (solo registros con observación válida)
         v_num = v.copy()
-        for col in ['costo','venta','ganancia']:
+        for col in ['costo','venta','ganancia','abono1','abono2']:
             v_num[col] = pd.to_numeric(v_num[col], errors='coerce').fillna(0.0)
-
         mask_obs = v_num['observacion'].fillna('').str.strip().ne('')
         v_valid = v_num[mask_obs]
-
-        tot_costos   = float(v_valid['costo'].sum())
-        tot_ventas   = float(v_valid['venta'].sum())
-        tot_ganancia = float(v_valid['ganancia'].sum())
-
         m1, m2, m3 = st.columns(3, gap="small")
-        m1.metric("Costos totales",  money(tot_costos))
-        m2.metric("Ventas totales",  money(tot_ventas))
-        m3.metric("Ganancia total",  money(tot_ganancia))
+        m1.metric("Costos totales",  money(float(v_valid['costo'].sum())))
+        m2.metric("Ventas totales",  money(float(v_valid['venta'].sum())))
+        m3.metric("Ganancia total",  money(float(v_valid['ganancia'].sum())))
 
-        with st.expander("🔍 Detalle de ventas por observación", expanded=False):
-            det = (
-                v_valid.groupby("observacion", dropna=False)["venta"]
-                .sum().rename("VENTA").reset_index()
-                .sort_values("VENTA", ascending=False)
-            )
-            det = df_format_money(det, ["VENTA"])
-            st.dataframe(det, use_container_width=True)
-            st.caption(f"Con ajuste: {money(float(v_valid['venta'].sum()) + ADJ_VENTAS_EFECTIVO)}")
+        # Paginación
+        v = v.sort_values(["fecha","id"], ascending=[False, False]).reset_index(drop=True)
+        page_size = st.number_input("Filas por página", min_value=5, max_value=100, value=20, step=5, key="ventas_page_size")
+        total = len(v)
+        num_pages = max(1, math.ceil(total / page_size))
+        page = st.number_input("Página", min_value=1, max_value=num_pages, value=min(1, num_pages), step=1, key="ventas_page")
+        start = (page - 1) * page_size
+        stop  = start + page_size
+        v_page = v.iloc[start:stop].copy()
 
-        # Tabla simple (sin columna de acciones)
-        cols = ['fecha','cliente_nombre','observacion','costo','venta','ganancia','debe_flag','paga','abono1','abono2']
-        v_show = v.sort_values('fecha', ascending=False)[cols].copy()
+        # Tabla visual rápida (sin acciones) de la página actual
+        cols_show = ['fecha','cliente_nombre','observacion','costo','venta','ganancia','debe_flag','paga','abono1','abono2']
+        v_show = v_page[cols_show].copy()
         v_show['debe_flag'] = v_show['debe_flag'].fillna(0).astype(int).map({1: "SÍ", 0: "NO"})
         v_show = df_format_money(v_show, ['costo','venta','ganancia','abono1','abono2'])
-        st.dataframe(v_show, use_container_width=True, hide_index=True)
+        st.dataframe(v_show, use_container_width=True)
+
+        st.markdown("#### Acciones por venta")
+        st.caption("Usa ✏️ para editar (abre un popover) o 🗑️ para eliminar con confirmación.")
+
+        # Cabecera compacta para las filas con acciones
+        hc1, hc2, hc3, hc4, hc5 = st.columns([1.1, 2.5, 1.2, 1.2, 2], gap="small")
+        with hc1: st.write("**Fecha**")
+        with hc2: st.write("**Cliente**")
+        with hc3: st.write("**Obs.**")
+        with hc4: st.write("**Venta**")
+        with hc5: st.write("**Acciones**")
+
+        for _, r in v_page.iterrows():
+            rid = int(r["id"])
+            c1, c2, c3, c4, c5 = st.columns([1.1, 2.5, 1.2, 1.2, 2], gap="small")
+
+            # Datos de la fila
+            with c1:
+                f = r["fecha"]
+                st.write(f.strftime("%d/%m/%Y") if isinstance(f, date) else str(f))
+            with c2:
+                st.write(str(r["cliente_nombre"]).strip() or "—")
+            with c3:
+                st.write((str(r["observacion"]) or "—"))
+            with c4:
+                st.write(money(_nz(r["venta"])))
+
+            # Acciones
+            with c5:
+                # --- EDITAR ---
+                pop = st.popover("✏️ Editar", use_container_width=True, key=f"pop_edit_{rid}")
+                with pop:
+                    ef1, ef2 = st.columns(2, gap="small")
+                    fecha_new = ef1.date_input("Fecha",
+                        value=r["fecha"] if isinstance(r["fecha"], date) else date.today(),
+                        format="DD/MM/YYYY", key=f"edit_fecha_{rid}")
+                    cliente_new = ef2.text_input("Cliente", value=str(r["cliente_nombre"] or ""), key=f"edit_cliente_{rid}")
+
+                    n1, n2 = st.columns(2, gap="small")
+                    costo_new = currency_input("Costo", key=f"edit_costo_{rid}", value=_nz(r["costo"]))
+                    venta_new = currency_input("Venta", key=f"edit_venta_{rid}", value=_nz(r["venta"]))
+
+                    ganancia_calc = max(0.0, float(venta_new - costo_new))
+                    st.text_input("Ganancia", value=money(ganancia_calc), disabled=True, key=f"edit_gan_view_{rid}")
+
+                    b1, b2, b3 = st.columns(3, gap="small")
+                    debe_new = b1.checkbox("DEBE", value=bool(int(r.get("debe_flag") or 0)), key=f"edit_debe_{rid}")
+                    paga_new = b2.checkbox("PAGA", value=bool(str(r.get("paga") or "").strip()), key=f"edit_paga_{rid}")
+
+                    obs_actual = str(r.get("observacion") or "").upper()
+                    opciones_obs = ["EFECTIVO", "CUENTA", ""]
+                    try:
+                        idx_obs = opciones_obs.index(obs_actual) if obs_actual in opciones_obs else 0
+                    except Exception:
+                        idx_obs = 0
+                    obs_new = b3.selectbox("Observación", options=opciones_obs, index=idx_obs, key=f"edit_obs_{rid}")
+
+                    a1, a2 = st.columns(2, gap="small")
+                    ab1_new = currency_input("Abono 1", key=f"edit_ab1_{rid}", value=_nz(r["abono1"]))
+                    ab2_new = currency_input("Abono 2", key=f"edit_ab2_{rid}", value=_nz(r["abono2"]))
+
+                    if st.button("Guardar cambios", type="primary", key=f"edit_save_{rid}"):
+                        # Validaciones mínimas
+                        if not str(cliente_new).strip():
+                            st.warning("El cliente no puede estar vacío.")
+                        elif float(venta_new) <= 0:
+                            st.warning("La venta debe ser mayor que 0.")
+                        else:
+                            ok = update_venta_fields(
+                                rid,
+                                fecha=str(fecha_new),
+                                cliente_nombre=cliente_new,
+                                costo=float(costo_new),
+                                venta=float(venta_new),
+                                ganancia=float(ganancia_calc),
+                                debe_flag=1 if debe_new else 0,
+                                paga=("X" if paga_new else ""),
+                                abono1=float(ab1_new),
+                                abono2=float(ab2_new),
+                                observacion=str(obs_new or ("CUENTA" if debe_new else "EFECTIVO")),
+                            )
+                            if ok:
+                                finish_and_refresh("Venta actualizada", ["transacciones"])
+                            else:
+                                st.error("No se pudo actualizar (¿permisos o fila no encontrada?).")
+
+                # --- ELIMINAR ---
+                popd = st.popover("🗑️ Eliminar", use_container_width=True, key=f"pop_del_{rid}")
+                with popd:
+                    st.warning("¿Eliminar esta venta? Esta acción no se puede deshacer.")
+                    if st.button("Confirmar eliminación", key=f"del_btn_{rid}"):
+                        delete_venta_id(rid)
+                        finish_and_refresh("Venta eliminada", ["transacciones"])
+
     else:
-        st.info("Sin ventas registradas aún.")
+        st.info("No hay ventas registradas aún.")
 
 
 
