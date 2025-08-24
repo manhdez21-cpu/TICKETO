@@ -29,7 +29,7 @@ st.markdown("""
 .block-container > div:has(> style:only-child),
 .block-container > div:has(> iframe[height="0"]:only-child),
 .block-container > div:has(> iframe[style*="height: 0px"]:only-child){
-  margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
+margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
 }
 
 /* 5) Si algún H1/H2 es el primer hijo, quítale el margen superior del navegador, no su altura */
@@ -41,17 +41,17 @@ st.markdown("""
 components.html("""
 <script>
 (function(){
-  try{
+try{
     if (!window.matchMedia("(max-width: 900px)").matches) return;
     var url = new URL(window.location.href);
     var changed = false;
     if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
     if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
     if (changed){
-      history.replaceState(null, "", url.toString());
-      setTimeout(function(){ location.reload(); }, 0);
+    history.replaceState(null, "", url.toString());
+    setTimeout(function(){ location.reload(); }, 0);
     }
-  }catch(e){}
+}catch(e){}
 })();
 </script>
 """, height=0, width=0)
@@ -88,12 +88,12 @@ div[data-testid="stDecoration"]{ height:0 !important; }
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main .block-container{
-  padding-top: 0 !important;
+padding-top: 0 !important;
 }
 @media (max-width: 900px){
-  [data-testid="stAppViewContainer"] > .main .block-container{
+[data-testid="stAppViewContainer"] > .main .block-container{
     padding-top: 0 !important;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -115,22 +115,22 @@ st.markdown("""
 <style>
 /* Botón primario consistente */
 .stButton > button[kind="primary"]{
-  background:#4f46e5 !important; border:1px solid #4f46e5 !important;
-  color:#fff !important; border-radius:12px !important; font-weight:600;
+background:#4f46e5 !important; border:1px solid #4f46e5 !important;
+color:#fff !important; border-radius:12px !important; font-weight:600;
 }
 .stButton > button:hover[kind="primary"]{ filter:brightness(0.95); }
 
 /* Métricas como tarjetas */
 [data-testid="stMetric"]{
-  padding:14px 16px; border:1px solid rgba(120,120,135,.18);
-  border-radius:14px; box-shadow:0 1px 2px rgba(0,0,0,.04);
-  background:#fff;
+padding:14px 16px; border:1px solid rgba(120,120,135,.18);
+border-radius:14px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+background:#fff;
 }
 
 /* Expanders como secciones */
 details[data-testid="stExpander"]{
-  border:1px solid rgba(120,120,135,.18); border-radius:14px; overflow:hidden;
-  background:#fff;
+border:1px solid rgba(120,120,135,.18); border-radius:14px; overflow:hidden;
+background:#fff;
 }
 details[data-testid="stExpander"] > summary{ padding:12px 14px; font-weight:700; }
 
@@ -138,12 +138,12 @@ details[data-testid="stExpander"] > summary{ padding:12px 14px; font-weight:700;
 /* Tablas: zebra + encabezado fijo */
 [data-testid="stDataFrame"] table tbody tr:nth-child(odd){ background:#fafafa; }
 [data-testid="stDataFrame"] table thead th{
-  position: sticky; top: 0; background:#ffffff; z-index: 2;
-  box-shadow: 0 1px 0 rgba(0,0,0,.06);
+position: sticky; top: 0; background:#ffffff; z-index: 2;
+box-shadow: 0 1px 0 rgba(0,0,0,.06);
 }
 [data-testid="stDataFrame"] table td,
 [data-testid="stDataFrame"] table th{
-  white-space:nowrap;
+white-space:nowrap;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -151,12 +151,12 @@ details[data-testid="stExpander"] > summary{ padding:12px 14px; font-weight:700;
 st.markdown("""
 <style>
 :root{
-  --card-bg:#ffffff; --card-br:rgba(120,120,135,.16); --text-1:#111827; --text-2:#6b7280;
+--card-bg:#ffffff; --card-br:rgba(120,120,135,.16); --text-1:#111827; --text-2:#6b7280;
 }
 @media (prefers-color-scheme: dark){
-  :root{
+:root{
     --card-bg:#0b0f19; --card-br:#1f2937; --text-1:#e5e7eb; --text-2:#9ca3af;
-  }
+}
 }
 
 /* ==== Stat cards elegantes ==== */
@@ -165,19 +165,19 @@ st.markdown("""
 @media (max-width: 640px){ .tt-grid{ grid-template-columns:1fr; } }
 
 .tt-stat{
-  display:flex; gap:12px; align-items:center;
-  padding:16px 16px; border:1px solid var(--card-br); border-radius:16px;
-  background:var(--card-bg); box-shadow:0 4px 12px rgba(0,0,0,.05);
+display:flex; gap:12px; align-items:center;
+padding:16px 16px; border:1px solid var(--card-br); border-radius:16px;
+background:var(--card-bg); box-shadow:0 4px 12px rgba(0,0,0,.05);
 }
 .tt-stat .ic{
-  width:44px; height:44px; border-radius:12px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:22px; color:white; box-shadow:0 8px 18px rgba(0,0,0,.15) inset;
+width:44px; height:44px; border-radius:12px;
+display:flex; align-items:center; justify-content:center;
+font-size:22px; color:white; box-shadow:0 8px 18px rgba(0,0,0,.15) inset;
 }
 .tt-stat .meta{ min-width:0 }
 .tt-stat .lbl{
-  font-size:12px; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--text-2); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+color:var(--text-2); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .tt-stat .val{ font-size:26px; font-weight:800; color:var(--text-1); line-height:1.15; }
 
@@ -190,13 +190,13 @@ st.markdown("""
 
 /* Card contenedor (EFECTIVO / TOTAL DE CAPITAL) */
 .tt-card{
-  border:1px solid var(--card-br); border-radius:16px; background:var(--card-bg);
-  padding:16px; box-shadow:0 6px 16px rgba(0,0,0,.05); margin-top:10px;
+border:1px solid var(--card-br); border-radius:16px; background:var(--card-bg);
+padding:16px; box-shadow:0 6px 16px rgba(0,0,0,.05); margin-top:10px;
 }
 .tt-card h4{ margin:0 0 10px 0; font-size:18px; font-weight:800; color:var(--text-1); }
 .tt-callout{
-  border:1px dashed rgba(99,102,241,.35); background:rgba(99,102,241,.06);
-  padding:16px; border-radius:16px; font-weight:800; font-size:26px; margin-top:12px;
+border:1px dashed rgba(99,102,241,.35); background:rgba(99,102,241,.06);
+padding:16px; border-radius:16px; font-weight:800; font-size:26px; margin-top:12px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -204,15 +204,15 @@ st.markdown("""
 st.markdown("""
 <style>
 :root{
-  /* Paleta de la app */
-  --pri:#6366f1;          /* indigo */
-  --accent:#f97316;       /* naranja */
-  --text:#111827; --muted:#6b7280; --border:rgba(120,120,135,.18); --card:#ffffff;
+/* Paleta de la app */
+--pri:#6366f1;          /* indigo */
+--accent:#f97316;       /* naranja */
+--text:#111827; --muted:#6b7280; --border:rgba(120,120,135,.18); --card:#ffffff;
 }
 @media (prefers-color-scheme: dark){
-  :root{
+:root{
     --text:#e5e7eb; --muted:#9ca3af; --border:#1f2937; --card:#0b0f19;
-  }
+}
 }
 
 /* Grid responsivo, limpio */
@@ -222,22 +222,22 @@ st.markdown("""
 
 /* Tarjeta minimal (sin sombras, sin negrita) */
 .mm-stat{
-  background:var(--card); border:1px solid var(--border); border-radius:12px;
-  padding:12px 14px; display:flex; flex-direction:column; gap:4px;
-  border-left:4px solid var(--tone, var(--border));
+background:var(--card); border:1px solid var(--border); border-radius:12px;
+padding:12px 14px; display:flex; flex-direction:column; gap:4px;
+border-left:4px solid var(--tone, var(--border));
 }
 .mm-stat .lbl{
-  font-size:12px; letter-spacing:.04em; text-transform:uppercase;
-  color:var(--muted); font-weight:400; line-height:1.2;
+font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+color:var(--muted); font-weight:400; line-height:1.2;
 }
 .mm-stat .val{
-  font-size:24px; font-weight:400; color:var(--text); line-height:1.15;
+font-size:24px; font-weight:400; color:var(--text); line-height:1.15;
 }
 
 /* Contenedor simple tipo “card” para secciones */
 .mm-card{
-  background:var(--card); border:1px solid var(--border); border-radius:12px;
-  padding:14px; margin-top:10px;
+background:var(--card); border:1px solid var(--border); border-radius:12px;
+padding:14px; margin-top:10px;
 }
 .mm-card h4{ margin:0 0 8px 0; font-size:16px; font-weight:400; color:var(--muted); }
 
@@ -255,16 +255,16 @@ h1, .tt-titlebar .ttl{ font-weight:600 !important; }
 
 /* Tarjeta minimal: un pelín más compacta y borde izquierdo más fino */
 .mm-stat{
-  padding:10px 12px;
-  border-radius:10px;
-  border-left-width:3px;        /* antes 4px */
+padding:10px 12px;
+border-radius:10px;
+border-left-width:3px;        /* antes 4px */
 }
 .mm-stat .lbl{
-  font-size:11px;               /* etiqueta más discreta */
-  letter-spacing:.06em;
+font-size:11px;               /* etiqueta más discreta */
+letter-spacing:.06em;
 }
 .mm-stat .val{
-  font-size:22px;               /* número más sereno */
+font-size:22px;               /* número más sereno */
 }
 
 /* Cards contenedoras ligeramente más suaves */
@@ -275,7 +275,7 @@ h1, .tt-titlebar .ttl{ font-weight:600 !important; }
 [data-testid="stTextInput"] input,
 [data-testid="stTextArea"] textarea,
 [data-testid="stNumberInput"] input{
-  border-radius:10px;
+border-radius:10px;
 }
 
 /* Ajuste fino de separaciones dentro del consolidado */
@@ -289,8 +289,8 @@ st.markdown("""
 /* 1) Quita relleno del contenedor principal */
 [data-testid="stAppViewContainer"] > .main,
 [data-testid="stAppViewContainer"] > .main .block-container{
-  padding-top:0 !important;
-  margin-top:0 !important;
+padding-top:0 !important;
+margin-top:0 !important;
 }
 
 /* 3) Asegura que los H1/H2 no agreguen margen arriba */
@@ -299,7 +299,7 @@ st.markdown("""
 /* 4) Colapsa wrappers de components.html invisibles (iframes de altura 0) */
 .block-container > div:has(> iframe[height="0"]:only-child),
 .block-container > div:has(> iframe[style*="height: 0px"]:only-child){
-  margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
+margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
 }
 
 /* 5) Por si usas tu barra pegajosa personalizada */
@@ -447,7 +447,7 @@ def _issue_session(username: str, role: str):
     cm = _cookie_mgr(); cm.get_all()
     expires_dt = datetime.now() + timedelta(seconds=int(ttl))
     cm.set(SESSION_COOKIE, token, expires_at=expires_dt, key="set_"+SESSION_COOKIE,
-           path="/", secure=COOKIE_SECURE_FLAG, same_site="Lax")
+        path="/", secure=COOKIE_SECURE_FLAG, same_site="Lax")
     st.session_state["auth_user"] = username
     st.session_state["auth_role"] = role
     st.session_state.pop(LOGOUT_SENTINEL, None)
@@ -600,11 +600,11 @@ def migrate_add_owner_columns():
                 conn.execute(f"UPDATE {t} SET owner='admin' WHERE owner IS NULL OR owner=''")
 
 def audit(action: str,
-          table_name: str | None = None,
-          row_id: int | None = None,
-          before: dict | None = None,
-          after: dict | None = None,
-          extra: dict | None = None):
+        table_name: str | None = None,
+        row_id: int | None = None,
+        before: dict | None = None,
+        after: dict | None = None,
+        extra: dict | None = None):
     """Guarda un registro de auditoría en audit_log."""
     try:
         u = st.session_state.get("auth_user") or "(anon)"
@@ -684,12 +684,12 @@ def migrate_to_per_user_data():
                 # crear nueva tabla con PK auto y UNIQUE(fecha,owner)
                 conn.execute("""
                 CREATE TABLE IF NOT EXISTS consolidado_diario_v2 (
-                  id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  fecha TEXT,
-                  efectivo REAL DEFAULT 0,
-                  notas TEXT,
-                  owner TEXT,
-                  UNIQUE(fecha, owner)
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TEXT,
+                efectivo REAL DEFAULT 0,
+                notas TEXT,
+                owner TEXT,
+                UNIQUE(fecha, owner)
                 )
                 """)
                 # mover datos viejos con owner='admin'
@@ -697,8 +697,8 @@ def migrate_to_per_user_data():
                 rows = cur.fetchall()
                 for fecha, efectivo, notas in rows:
                     conn.execute("""
-                      INSERT OR IGNORE INTO consolidado_diario_v2 (fecha, efectivo, notas, owner)
-                      VALUES (?, ?, ?, 'admin')
+                    INSERT OR IGNORE INTO consolidado_diario_v2 (fecha, efectivo, notas, owner)
+                    VALUES (?, ?, ?, 'admin')
                     """, (fecha, efectivo, notas))
                 # reemplazar tabla
                 conn.execute("DROP TABLE consolidado_diario")
@@ -749,14 +749,28 @@ def db_set_role(username: str, role: str):
     with get_conn() as conn:
         conn.execute("UPDATE users SET role=? WHERE username=?", (role, username.strip()))
     audit("user.role.change", table_name="users",
-          before={"username": username.strip(), "role": old["role"] if old else None},
-          after={"username": username.strip(), "role": role})
+        before={"username": username.strip(), "role": old["role"] if old else None},
+        after={"username": username.strip(), "role": role})
 
 def db_delete_user(username: str):
-    old = db_get_user(username)
+    u = (username or "").strip()
+    # 🚫 No permitir borrar la cuenta admin
+    if u.lower() == "admin":
+        raise ValueError("No se puede eliminar el usuario 'admin'.")
+
+    # (opcional) Evitar que te borres a ti mismo por accidente
+    try:
+        cur_user = (st.session_state.get("auth_user") or "").strip().lower()
+        if u.lower() == cur_user:
+            raise ValueError("No puedes eliminar la sesión/usuario con el que estás logueado.")
+    except Exception:
+        pass
+
+    old = db_get_user(u)
     with get_conn() as conn:
-        conn.execute("DELETE FROM users WHERE username=?", (username.strip(),))
-    audit("user.delete", table_name="users", before={"username": username.strip(), "role": old["role"] if old else None})
+        conn.execute("DELETE FROM users WHERE username=?", (u,))
+    audit("user.delete", table_name="users",
+          before={"username": u, "role": old["role"] if old else None})
 
 def ensure_admin_seed():
     try:
@@ -781,12 +795,12 @@ def login_form() -> None:
     st.markdown("""
     <style>
     .login-card{
-      max-width: 520px; margin: 6vh auto; padding: 20px 22px;
-      border:1px solid rgba(120,120,135,.18); border-radius:14px; background:#fff;
-      box-shadow:0 6px 18px rgba(0,0,0,.06);
+    max-width: 520px; margin: 6vh auto; padding: 20px 22px;
+    border:1px solid rgba(120,120,135,.18); border-radius:14px; background:#fff;
+    box-shadow:0 6px 18px rgba(0,0,0,.06);
     }
     @media (prefers-color-scheme: dark){
-      .login-card{ background:#0b0f19; border-color:#1f2937; }
+    .login-card{ background:#0b0f19; border-color:#1f2937; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -897,8 +911,8 @@ def set_meta(key: str, value: str):
         )
 
     audit("meta.set", table_name="meta",
-          before={"key": key, "value": old_value},
-          after={"key": key, "value": value})
+        before={"key": key, "value": old_value},
+        after={"key": key, "value": value})
 
 def get_meta(key: str, default: float|str|None=None):
     with get_conn() as conn:
@@ -1338,9 +1352,9 @@ def upsert_consolidado(fecha_str: str, efectivo: float, notas: str=""):
                 notas=excluded.notas
         """, (fecha_str, _to_float(efectivo), str(notas or '').strip(), owner))
     audit("upsert", table_name="consolidado_diario",
-          extra={"fecha": fecha_str, "owner": owner},
-          before=before,
-          after={"fecha": fecha_str, "efectivo": float(efectivo), "notas": str(notas or '').strip(), "owner": owner})
+        extra={"fecha": fecha_str, "owner": owner},
+        before=before,
+        after={"fecha": fecha_str, "efectivo": float(efectivo), "notas": str(notas or '').strip(), "owner": owner})
 
 def get_efectivo_global_now() -> tuple[float, str]:
     owner = _current_owner()
@@ -1375,8 +1389,8 @@ def insert_venta(r: dict, owner_override: str | None = None) -> int:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (payload['fecha'], payload['cliente_nombre'], payload['costo'], payload['venta'],
-             payload['ganancia'], payload['debe_flag'], payload['paga'], payload['abono1'],
-             payload['abono2'], payload['observacion'], payload['owner'])
+            payload['ganancia'], payload['debe_flag'], payload['paga'], payload['abono1'],
+            payload['abono2'], payload['observacion'], payload['owner'])
         )
         row_id = cur.lastrowid
     audit("insert", table_name="transacciones", row_id=row_id, after=payload)
@@ -1550,7 +1564,7 @@ def update_venta_fields(row_id: int, **changes) -> bool:
         before_row = cur.fetchone()
         if not before_row:
             audit("update.denied", table_name="transacciones", row_id=int(row_id),
-                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
+                extra={"reason":"row not found or not owned", "owner":_current_owner()})
             return False
 
         cols = [d[0] for d in cur.description]
@@ -1591,7 +1605,7 @@ def update_gasto_fields(row_id: int, **changes) -> bool:
         before_row = cur.fetchone()
         if not before_row:
             audit("update.denied", table_name="gastos", row_id=int(row_id),
-                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
+                extra={"reason":"row not found or not owned", "owner":_current_owner()})
             return False
 
         cols = [d[0] for d in cur.description]
@@ -1631,7 +1645,7 @@ def update_prestamo_fields(row_id: int, **changes) -> bool:
         before_row = cur.fetchone()
         if not before_row:
             audit("update.denied", table_name="prestamos", row_id=int(row_id),
-                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
+                extra={"reason":"row not found or not owned", "owner":_current_owner()})
             return False
 
         cols = [d[0] for d in cur.description]
@@ -1671,7 +1685,7 @@ def update_inventario_fields(row_id: int, **changes) -> bool:
         before_row = cur.fetchone()
         if not before_row:
             audit("update.denied", table_name="inventario", row_id=int(row_id),
-                  extra={"reason":"row not found or not owned", "owner":_current_owner()})
+                extra={"reason":"row not found or not owned", "owner":_current_owner()})
             return False
 
         cols = [d[0] for d in cur.description]
@@ -1719,7 +1733,7 @@ def show_flash_if_any():
     st.success(msg)
 
 def currency_input(label: str, key: str, value: float = 0.0,
-                   help: str | None = None, in_form: bool = False, live: bool = True) -> float:
+                help: str | None = None, in_form: bool = False, live: bool = True) -> float:
     """
     Campo moneda: miles '.' y decimales ',' (0–2).
     En formularios (`in_form=True`) NO escribe en session_state (solo lee).
@@ -1785,32 +1799,32 @@ def currency_input(label: str, key: str, value: float = 0.0,
     if live:
         components.html(f"""
         <script>(function(){{
-          try{{
+        try{{
             const doc=(window.parent||window).document;
             const LABEL={json.dumps(label)}; const STATE={json.dumps(state_key)};
             function groupDots(d){{ d=(d||'').replace(/\\D/g,'').replace(/^0+(?=\\d)/,'')||'0';
-              let out='',c=0; for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0&&i>0) out='.'+out; }} return out;}}
+            let out='',c=0; for(let i=d.length-1;i>=0;--i){{ out=d[i]+out; if(++c%3===0&&i>0) out='.'+out; }} return out;}}
             function normalize(s){{
-              s=(s||'').replace(/\\s+/g,'');
-              const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'').replace(/\\./g,'');
-              const i=s.indexOf(','); if(i!==-1) s=s.slice(0,i+1)+s.slice(i+1).replace(/,/g,'');
-              let ent=s,dec=''; if(i!==-1){{ ent=s.slice(0,i); dec=s.slice(i+1).replace(/\\D/g,'').slice(0,2); }}
-              ent=ent.replace(/\\D/g,''); let out=(ent?groupDots(ent):'0')+(dec?(','+dec):''); if(neg&&out!=='0') out='-'+out; return out;
+            s=(s||'').replace(/\\s+/g,'');
+            const neg=/^[-−(]/.test(s); s=s.replace(/[()−-]/g,'').replace(/\\./g,'');
+            const i=s.indexOf(','); if(i!==-1) s=s.slice(0,i+1)+s.slice(i+1).replace(/,/g,'');
+            let ent=s,dec=''; if(i!==-1){{ ent=s.slice(0,i); dec=s.slice(i+1).replace(/\\D/g,'').slice(0,2); }}
+            ent=ent.replace(/\\D/g,''); let out=(ent?groupDots(ent):'0')+(dec?(','+dec):''); if(neg&&out!=='0') out='-'+out; return out;
             }}
             function install(el){{
-              if(!el||el.dataset.ttMoneyInstalled===STATE) return;
-              el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
-              const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value) el.value=v; }};
-              el.addEventListener('input', ()=>setTimeout(fmt,0));
-              el.addEventListener('keydown',(e)=>{{ if(e.key==='Enter'){{ const v=normalize(el.value);
+            if(!el||el.dataset.ttMoneyInstalled===STATE) return;
+            el.dataset.ttMoneyInstalled=STATE; el.setAttribute('inputmode','decimal'); el.autocomplete='off';
+            const fmt=()=>{{ const v=normalize(el.value); if(v!==el.value) el.value=v; }};
+            el.addEventListener('input', ()=>setTimeout(fmt,0));
+            el.addEventListener('keydown',(e)=>{{ if(e.key==='Enter'){{ const v=normalize(el.value);
                 if(v!==el.value){{ el.value=v; el.dispatchEvent(new Event('input',{{bubbles:true}})); }} }} }});
-              setTimeout(fmt,0);
+            setTimeout(fmt,0);
             }}
             let tries=0,t=setInterval(()=>{{
-              const nodes=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].filter(n=>n&&n.dataset.ttMoneyInstalled!==STATE);
-              if(nodes.length){{ nodes.forEach(install); clearInterval(t); }} else if(++tries>40) clearInterval(t);
+            const nodes=[...doc.querySelectorAll('input[aria-label="'+LABEL+'"]')].filter(n=>n&&n.dataset.ttMoneyInstalled!==STATE);
+            if(nodes.length){{ nodes.forEach(install); clearInterval(t); }} else if(++tries>40) clearInterval(t);
             }},80);
-          }}catch(e){{}}
+        }}catch(e){{}}
         }})()</script>""", height=0, width=0)
 
     # ---- Resultado numérico robusto ----
@@ -1959,12 +1973,12 @@ def show_logo_over_title(username: str, logo_path: str | None = None):
     uri = _img_to_data_uri(logo_path or _guess_logo_path())
     st.markdown("""
     <style>
-      .brand-top{
+    .brand-top{
         display:flex; align-items:center; gap:10px;
         margin:4px 0 2px 0;
-      }
-      .brand-top img{ height:100px; width:auto; display:block; }
-      .brand-top .u{ font-weight:600; color:#374151; letter-spacing:.2px; }
+    }
+    .brand-top img{ height:100px; width:auto; display:block; }
+    .brand-top .u{ font-weight:600; color:#374151; letter-spacing:.2px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1978,18 +1992,18 @@ def show_logo_over_title(username: str, logo_path: str | None = None):
                     unsafe_allow_html=True)
         
 def show_sticky_header(title_text: str,
-                       logo_path: str | None = None,
-                       show_brand_text: bool = False,
-                       fixed: bool = False,
-                       warn_if_missing: bool = True,
-                       username: str | None = None):
+                    logo_path: str | None = None,
+                    show_brand_text: bool = False,
+                    fixed: bool = False,
+                    warn_if_missing: bool = True,
+                    username: str | None = None):
     user_html = f'<div class="r"><span class="tt-user">👤 {username}</span></div>' if username else '<div class="r"></div>'
     st.markdown(
         f'''
         <div class="tt-titlebar" role="banner">
-          <div class="l"></div>
-          <div class="ttl">{_clean_title(title_text)}</div>
-          {user_html}
+        <div class="l"></div>
+        <div class="ttl">{_clean_title(title_text)}</div>
+        {user_html}
         </div>
         ''',
         unsafe_allow_html=True
@@ -2005,24 +2019,24 @@ def show_user_badge(username: str, logo_path: str | None = None, warn_if_missing
     st.markdown("""
 <style>
 .app-user-badge{
-  position: fixed;
-  top: 10px;
-  right: 16px;
-  z-index: 999999;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(255,255,255,.92);
-  padding: 6px 10px;
-  border-radius: 999px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
-  backdrop-filter: saturate(180%) blur(6px);
-  -webkit-backdrop-filter: saturate(180%) blur(6px);
-  border: 1px solid rgba(120,120,135,.18);
+position: fixed;
+top: 10px;
+right: 16px;
+z-index: 999999;
+display: inline-flex;
+align-items: center;
+gap: 10px;
+background: rgba(255,255,255,.92);
+padding: 6px 10px;
+border-radius: 999px;
+box-shadow: 0 2px 6px rgba(0,0,0,.08);
+backdrop-filter: saturate(180%) blur(6px);
+-webkit-backdrop-filter: saturate(180%) blur(6px);
+border: 1px solid rgba(120,120,135,.18);
 }
 .app-user-badge img{ height:22px; width:auto; display:block; }
 .app-user-badge .name{
-  font-weight:600; color:#374151; letter-spacing:.2px; white-space:nowrap;
+font-weight:600; color:#374151; letter-spacing:.2px; white-space:nowrap;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -2048,7 +2062,7 @@ def show_sidebar_logo(logo_path: str | None = None, height: int = 64):
         f"""
         <div style="display:flex;align-items:center;justify-content:center;
                     padding:8px 0 12px;border-bottom:1px solid rgba(120,120,135,.15);">
-          <img src="{uri}" alt="logo" style="height:{height}px;width:auto;"/>
+        <img src="{uri}" alt="logo" style="height:{height}px;width:auto;"/>
         </div>
         """,
         unsafe_allow_html=True
@@ -2062,11 +2076,11 @@ def stat_card(label: str, value: str, icon: str, tone: str = "tt-indigo"):
     st.markdown(
         f"""
         <div class="tt-stat {tone}">
-          <div class="ic">{icon}</div>
-          <div class="meta">
+        <div class="ic">{icon}</div>
+        <div class="meta">
             <div class="lbl">{label}</div>
             <div class="val">{value}</div>
-          </div>
+        </div>
         </div>
         """,
         unsafe_allow_html=True
@@ -2077,8 +2091,8 @@ def stat_min(label: str, value: str, tone: str = "var(--pri)"):
     st.markdown(
         f"""
         <div class="mm-stat" style="--tone:{tone}">
-          <div class="lbl">{label}</div>
-          <div class="val">{value}</div>
+        <div class="lbl">{label}</div>
+        <div class="val">{value}</div>
         </div>
         """,
         unsafe_allow_html=True
@@ -2326,8 +2340,8 @@ def make_db_backup() -> Path:
         src.backup(dst)
     try:
         files = sorted(BACKUP_DIR.glob("finanzas_*.sqlite"),
-                       key=lambda p: p.stat().st_mtime,
-                       reverse=True)
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True)
         for p in files[KEEP_BACKUPS:]:
             p.unlink(missing_ok=True)
     except Exception:
@@ -2385,8 +2399,8 @@ def _insert_many(table: str, df: pd.DataFrame) -> int:
 def import_excel_all(xls_file, replace: bool = False) -> dict:
     """
     Carga HOJAS conocidas de un .xlsx:
-      - Ventas, Gastos, Prestamos, Inventario
-      - DeudoresIniciales desde hoja 'Consolidado' (cols E/F)
+    - Ventas, Gastos, Prestamos, Inventario
+    - DeudoresIniciales desde hoja 'Consolidado' (cols E/F)
     """
     xls = pd.ExcelFile(xls_file)
     if replace:
@@ -2595,11 +2609,11 @@ with st.sidebar:
     if _logo_uri:
         st.markdown("""
         <style>
-          .sb-logo{
+        .sb-logo{
             display:flex; justify-content:center; align-items:center;
             padding: 6px 0 14px;
-          }
-          .sb-logo img{ height:52px; width:auto; display:block; }
+        }
+        .sb-logo img{ height:52px; width:auto; display:block; }
         </style>
         """, unsafe_allow_html=True)
         st.markdown(f'<div class="sb-logo"><img src="{_logo_uri}" alt="logo"></div>', unsafe_allow_html=True)
@@ -2620,13 +2634,13 @@ with st.sidebar:
 <style>
 /* Contenedor del grupo */
 section[data-testid="stSidebar"] div[role="radiogroup"]{
-  display:flex; flex-direction:column; gap:10px; align-items:stretch;
+display:flex; flex-direction:column; gap:10px; align-items:stretch;
 }
 
 /* Cada opción */
 section[data-testid="stSidebar"] div[role="radiogroup"] > label{
-  width:100%; display:flex; align-items:center; cursor:pointer;
-  padding:0 !important; border:none !important; background:transparent !important;
+width:100%; display:flex; align-items:center; cursor:pointer;
+padding:0 !important; border:none !important; background:transparent !important;
 }
 
 /* Oculta el circulito del radio (primer hijo) */
@@ -2634,27 +2648,27 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-chil
 
 /* “Píldora” visible (segundo hijo) */
 section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
-  flex:1 1 auto;
-  border:1px solid rgba(120,120,135,.25);
-  border-radius:12px;
-  padding:10px 12px;
-  background:#ffffff;
-  box-shadow:0 1px 1px rgba(0,0,0,.03);
-  transition:background .15s ease, border-color .15s ease, box-shadow .15s ease;
+flex:1 1 auto;
+border:1px solid rgba(120,120,135,.25);
+border-radius:12px;
+padding:10px 12px;
+background:#ffffff;
+box-shadow:0 1px 1px rgba(0,0,0,.03);
+transition:background .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
 
 /* Hover */
 section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover > div:last-child{
-  background:#f8fafc; border-color:rgba(120,120,135,.45);
+background:#f8fafc; border-color:rgba(120,120,135,.45);
 }
 
 /* === SELECCIONADO (robusto, sin JS) === */
 section[data-testid="stSidebar"] div[role="radiogroup"] > label[aria-checked="true"] > div:last-child,
 section[data-testid="stSidebar"] div[role="radiogroup"] > label > *[role="radio"][aria-checked="true"] + div,
 section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="radio"]:checked + div{
-  background:#eef2ff !important;
-  border-color:#4f46e5 !important;
-  box-shadow:0 0 0 2px rgba(79,70,229,.18) inset;
+background:#eef2ff !important;
+border-color:#4f46e5 !important;
+box-shadow:0 0 0 2px rgba(79,70,229,.18) inset;
 }
                 
 /* Oculta el control nativo si aparece */
@@ -2667,7 +2681,7 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="ra
 # Construye la lista de tabs (agrega Admin si aplica)
 tabs = [
     
-    "🧮 Diario Consolidado", "📊 Panel de control", "🧾 Ventas",
+    "🧮 Diario Consolidado", "🧾 Ventas",
     "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "⬆️ Importar/Exportar", "👤 Deudores","⚙️ Mi Cuenta"
 ] + (["🛠️ Administración"] if is_admin() else [])
 
@@ -2755,40 +2769,40 @@ SHOW_QUICK_ACTIONS = False
 if st.session_state.get("ui_compact", False):
     st.markdown("""
     <style>
-      html, body, [data-testid="stSidebar"]{ font-size: 14px; }
-      [data-testid="stMetric"] small{ display:none; }  /* oculta subtexto de métricas */
-      .tt-titlebar .ttl{ font-size:22px !important; } /* reduce título fijo */
-      /* Opcional: achica pastillas del menú lateral un poquito */
-      section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
+    html, body, [data-testid="stSidebar"]{ font-size: 14px; }
+    [data-testid="stMetric"] small{ display:none; }  /* oculta subtexto de métricas */
+    .tt-titlebar .ttl{ font-size:22px !important; } /* reduce título fijo */
+    /* Opcional: achica pastillas del menú lateral un poquito */
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
         padding:8px 10px;
-      }
+    }
     </style>
     """, unsafe_allow_html=True)
 
 if st.session_state.get("ui_compact", False):
     st.markdown("""
     <style>
-      @media (max-width: 900px){
+    @media (max-width: 900px){
         .stButton > button{ min-height: 40px; font-size: 15px; }
         [data-testid="stMetric"]{ padding:12px 12px; }
         /* Reduce el gap entre controles en columnas pequeñas */
         .stColumn > div{ padding-top: 2px; padding-bottom: 2px; }
-      }
+    }
     </style>
     """, unsafe_allow_html=True)
 
 if st.session_state.get("ui_compact", False):
     st.markdown("""
     <style>
-      /* En móvil: permitir wrap en celdas para evitar scroll lateral infinito */
-      @media (max-width: 900px){
+    /* En móvil: permitir wrap en celdas para evitar scroll lateral infinito */
+    @media (max-width: 900px){
         [data-testid="stDataFrame"] table td,
         [data-testid="stDataFrame"] table th{
-          white-space: normal !important;
-          word-break: break-word !important;
+        white-space: normal !important;
+        word-break: break-word !important;
         }
         [data-testid="stDataFrame"] { height: 420px !important; }
-      }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -2806,68 +2820,68 @@ st.markdown("""
 /* ===== DARK MODE OVERRIDES (debe ir DESPUÉS del CSS claro) ===== */
 @media (prefers-color-scheme: dark){
 
-  :root{
+:root{
     --card-bg: #0b0f19;
     --card-border: #1f2937;
     --pill-bg: #111827;
     --pill-hover: #0f172a;
     --text: #e5e7eb;
-  }
+}
 
-  /* Tarjetas: métricas + expanders */
-  [data-testid="stMetric"],
-  details[data-testid="stExpander"]{
+/* Tarjetas: métricas + expanders */
+[data-testid="stMetric"],
+details[data-testid="stExpander"]{
     background: var(--card-bg) !important;
     border-color: var(--card-border) !important;
-  }
-  details[data-testid="stExpander"] > summary{
+}
+details[data-testid="stExpander"] > summary{
     color: var(--text) !important;
-  }
+}
 
-  /* Pastillas del menú lateral (radio de la sidebar) */
-  section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
+/* Pastillas del menú lateral (radio de la sidebar) */
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
     background: var(--pill-bg) !important;
     border-color: var(--card-border) !important;
-  }
-  section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover > div:last-child{
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover > div:last-child{
     background: var(--pill-hover) !important;
     border-color: #334155 !important;
-  }
-  section[data-testid="stSidebar"] div[role="radiogroup"] > label[aria-checked="true"] > div:last-child,
-  section[data-testid="stSidebar"] div[role="radiogroup"] > label > *[role="radio"][aria-checked="true"] + div,
-  section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="radio"]:checked + div{
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] > label[aria-checked="true"] > div:last-child,
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > *[role="radio"][aria-checked="true"] + div,
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="radio"]:checked + div{
     background: #111827 !important;
     border-color: #6366f1 !important;
     box-shadow: 0 0 0 2px rgba(99,102,241,.25) inset !important;
-  }
+}
 
-  /* Tablas (dataframe) */
-  [data-testid="stDataFrame"] table thead th{
+/* Tablas (dataframe) */
+[data-testid="stDataFrame"] table thead th{
     background: var(--card-bg) !important;
     color: var(--text) !important;
-  }
-  [data-testid="stDataFrame"] table tbody tr:nth-child(odd){
+}
+[data-testid="stDataFrame"] table tbody tr:nth-child(odd){
     background: #0f172a !important;
-  }
-  [data-testid="stDataFrame"] table td, 
-  [data-testid="stDataFrame"] table th{
+}
+[data-testid="stDataFrame"] table td, 
+[data-testid="stDataFrame"] table th{
     border-color: var(--card-border) !important;
-  }
+}
 
-  /* Botón primario */
-  .stButton > button[kind="primary"]{
+/* Botón primario */
+.stButton > button[kind="primary"]{
     background:#6366f1 !important;
     border-color:#6366f1 !important;
     color:#fff !important;
-  }
+}
 
-  /* Textos dentro de tarjetas/badge */
-  [data-testid="stMetric"] small,
-  [data-testid="stMetric"] label,
-  .app-user-badge .name,
-  .brand-top .u{
+/* Textos dentro de tarjetas/badge */
+[data-testid="stMetric"] small,
+[data-testid="stMetric"] label,
+.app-user-badge .name,
+.brand-top .u{
     color: var(--text) !important;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -2876,41 +2890,41 @@ st.markdown("""
 <style>
 @media (prefers-color-scheme: dark){
 
-  /* DataFrame: zebra par + color de texto en celdas */
-  [data-testid="stDataFrame"] table tbody tr:nth-child(even){
+/* DataFrame: zebra par + color de texto en celdas */
+[data-testid="stDataFrame"] table tbody tr:nth-child(even){
     background:#0b1220 !important;
-  }
-  [data-testid="stDataFrame"] table td{
+}
+[data-testid="stDataFrame"] table td{
     color: var(--text) !important;
-  }
+}
 
-  /* Métricas: valor grande y delta legibles */
-  [data-testid="stMetric"] [data-testid="stMetricValue"],
-  [data-testid="stMetric"] [data-testid="stMetricDelta"]{
+/* Métricas: valor grande y delta legibles */
+[data-testid="stMetric"] [data-testid="stMetricValue"],
+[data-testid="stMetric"] [data-testid="stMetricDelta"]{
     color: var(--text) !important;
-  }
+}
 
-  /* Pastillas de la sidebar: asegura color del texto */
-  section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
+/* Pastillas de la sidebar: asegura color del texto */
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
     color: var(--text) !important;
-  }
+}
 
-  /* Popover/Expander: texto consistente */
-  [data-testid="stExpander"] *,
-  [data-testid="stPopoverBody"] *{
+/* Popover/Expander: texto consistente */
+[data-testid="stExpander"] *,
+[data-testid="stPopoverBody"] *{
     color: var(--text) !important;
-  }
+}
 
-  /* Badge de usuario (arriba derecha) en tono oscuro */
-  .app-user-badge{
+/* Badge de usuario (arriba derecha) en tono oscuro */
+.app-user-badge{
     background: rgba(17,24,39,.88) !important;  /* similar a --card-bg con blur */
     border-color: var(--card-border) !important;
-  }
+}
 
-  /* Línea bajo el logo de la sidebar en oscuro */
-  .sb-logo{
+/* Línea bajo el logo de la sidebar en oscuro */
+.sb-logo{
     border-bottom:1px solid var(--card-border) !important;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -2939,40 +2953,40 @@ st.markdown("""
 /* 3 barras blancas centradas */
 [data-testid="stSidebarCollapseControl"] button::before,
 [data-testid="collapsedControl"]::before{
-  content:"";
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 22px; height: 2px;
-  background:#fff; border-radius: 2px;
-  box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
+content:"";
+position: absolute;
+top: 50%; left: 50%;
+transform: translate(-50%, -50%);
+width: 22px; height: 2px;
+background:#fff; border-radius: 2px;
+box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
 }
 
 [data-testid="stSidebarCollapseControl"] button:hover,
 [data-testid="collapsedControl"]:hover{
-  transform: translateY(-1px) scale(1.04);
+transform: translateY(-1px) scale(1.04);
 }
 
 /* Efecto pulse cuando está colapsado — tono naranja */
 @keyframes tt-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(249,115,22,.55); }
-  70%  { box-shadow: 0 0 0 14px rgba(249,115,22,0); }
-  100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
+0%   { box-shadow: 0 0 0 0 rgba(249,115,22,.55); }
+70%  { box-shadow: 0 0 0 14px rgba(249,115,22,0); }
+100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
 }
 [data-testid="collapsedControl"]{
-  animation: tt-pulse 2.2s ease-out infinite;
+animation: tt-pulse 2.2s ease-out infinite;
 }
 
 /* ========= SIDEBAR MÁS ANGOSTA EN MÓVIL ========= */
 @media (max-width: 900px){
-  section[data-testid="stSidebar"]{
+section[data-testid="stSidebar"]{
     width: 232px !important;
     min-width: 232px !important;
-  }
-  [data-testid="stSidebarCollapseControl"]{
+}
+[data-testid="stSidebarCollapseControl"]{
     top: 8px !important;
     left: 8px !important;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -2983,16 +2997,16 @@ st.markdown("""
 
 /* Móvil: NO lo ocultes (anula cualquier regla previa que lo esconda) */
 @media (max-width:900px){
-  [data-testid*="SidebarCollapse"],
-  [data-testid*="SidebarCollapse"] *,
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="stSidebarCollapseControl"] *,
-  [data-testid="collapsedControl"]{
+[data-testid*="SidebarCollapse"],
+[data-testid*="SidebarCollapse"] *,
+[data-testid="stSidebarCollapseControl"],
+[data-testid="stSidebarCollapseControl"] *,
+[data-testid="collapsedControl"]{
     display:flex !important;
     visibility:visible !important;
     pointer-events:auto !important;
     opacity:1 !important;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3005,10 +3019,10 @@ st.markdown("""
 .block-container > div:has(> iframe[style*="height:0"]:only-child),
 [data-testid="stElementContainer"]:has(> iframe[height="0"]:only-child),
 div[data-testid="stIFrame"]:has(> iframe[height="0"]:only-child){
-  margin:0 !important;
-  padding:0 !important;
-  min-height:0 !important;
-  line-height:0 !important;
+margin:0 !important;
+padding:0 !important;
+min-height:0 !important;
+line-height:0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3023,8 +3037,8 @@ div[data-testid="stDecoration"]{ height:0 !important; }
 /* 1) Sin padding/margen arriba en el contenedor principal */
 [data-testid="stAppViewContainer"] > .main,
 [data-testid="stAppViewContainer"] > .main .block-container{
-  padding-top:0 !important;
-  margin-top:0 !important;
+padding-top:0 !important;
+margin-top:0 !important;
 }
 
 /* 3) H1/H2 al ras cuando son lo primero */
@@ -3044,7 +3058,7 @@ st.markdown("""
 .block-container > div:has(> iframe[style*="height:0"]),
 [data-testid="stElementContainer"]:has(> iframe[height="0"]),
 div[data-testid="stIFrame"]:has(> iframe[height="0"]){
-  margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
+margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
 }
 
 </style>
@@ -3061,26 +3075,26 @@ st.markdown("""
 
 /* 2) Forzar visibilidad/posición de la hamburguesa en todas las vistas */
 @media (min-width:901px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="collapsedControl"]{
+[data-testid="stSidebarCollapseControl"],
+[data-testid="collapsedControl"]{
     position: fixed !important;
     top: 12px !important; left: 12px !important;
     display: flex !important; visibility: visible !important;
     opacity: 1 !important; pointer-events: auto !important;
     z-index: 4000 !important;
-  }
-  /* Deja espacio en el título para la hamburguesa */
-  .tt-titlebar{ padding-left:74px !important; }
+}
+/* Deja espacio en el título para la hamburguesa */
+.tt-titlebar{ padding-left:74px !important; }
 }
 @media (max-width:900px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="collapsedControl"]{
+[data-testid="stSidebarCollapseControl"],
+[data-testid="collapsedControl"]{
     position: fixed !important;
     top: 8px !important; left: 8px !important;
     display: flex !important; visibility: visible !important;
     opacity: 1 !important; pointer-events: auto !important;
     z-index: 4000 !important;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3104,31 +3118,31 @@ st.markdown("""
 [data-testid="stSidebarCollapseControl"],
 [data-testid="stSidebarCollapseControl"] > button,
 [data-testid="collapsedControl"]{
-  position:fixed !important;
-  top:12px !important; left:12px !important;
-  display:flex !important; visibility:visible !important; opacity:1 !important;
-  pointer-events:auto !important; z-index:4000 !important;
+position:fixed !important;
+top:12px !important; left:12px !important;
+display:flex !important; visibility:visible !important; opacity:1 !important;
+pointer-events:auto !important; z-index:4000 !important;
 }
 
 /* Estilo opcional (puedes quitarlo si quieres el look nativo) */
 [data-testid="stSidebarCollapseControl"],
 [data-testid="stSidebarCollapseControl"] > button,
 [data-testid="collapsedControl"]{
-  width:46px; height:46px; border-radius:999px; border:0;
-  background:linear-gradient(135deg,#f97316,#fb923c);
-  box-shadow:0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16);
+width:46px; height:46px; border-radius:999px; border:0;
+background:linear-gradient(135deg,#f97316,#fb923c);
+box-shadow:0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16);
 }
 [data-testid="stSidebarCollapseControl"] svg,
 [data-testid="stSidebarCollapseControl"] > button svg,
 [data-testid="collapsedControl"] svg{
-  width:22px; height:22px; display:block !important;   /* NO ocultes el SVG */
+width:22px; height:22px; display:block !important;   /* NO ocultes el SVG */
 }
 
 @media (max-width:900px){
-  [data-testid="stSidebarCollapseControl"],
-  [data-testid="stSidebarCollapseControl"] > button,
-  [data-testid="collapsedControl"]{ top:8px !important; left:8px !important; }
-  section[data-testid="stSidebar"]{ width:232px !important; min-width:232px !important; }
+[data-testid="stSidebarCollapseControl"],
+[data-testid="stSidebarCollapseControl"] > button,
+[data-testid="collapsedControl"]{ top:8px !important; left:8px !important; }
+section[data-testid="stSidebar"]{ width:232px !important; min-width:232px !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3137,8 +3151,8 @@ st.markdown("""
 <style id="tt-restore-burger">
 /* 1) No ocultes el header: vuelve a su altura normal */
 header[data-testid="stHeader"]{
-  height:auto !important; min-height:unset !important;
-  padding:0 !important; border:0 !important; background:transparent !important;
+height:auto !important; min-height:unset !important;
+padding:0 !important; border:0 !important; background:transparent !important;
 }
 
 # /* 2) El toolbar vuelve a ser clicable y sin forzado de posición */
@@ -3166,62 +3180,62 @@ st.markdown("""
 /* ===== TÍTULO CENTRADO + ESTILO ELEGANTE ===== */
 
 /* La barra ocupa 3 columnas simétricas:
-   [espacio izq] [título] [espacio dcha] → el título queda centrado
-   aunque esté la hamburguesa a la izquierda. */
+[espacio izq] [título] [espacio dcha] → el título queda centrado
+aunque esté la hamburguesa a la izquierda. */
 .tt-titlebar{
-  position: sticky; top: 0; z-index: 1000;
-  margin: 6px 0 14px;
-  padding: 8px 12px;
-  display: grid; align-items: center;
-  grid-template-columns: 52px 1fr 52px;           /* móvil */
-  background: rgba(255,255,255,.86);
-  border-bottom: 1px solid rgba(120,120,135,.14);
-  backdrop-filter: saturate(160%) blur(6px);
-  -webkit-backdrop-filter: saturate(160%) blur(6px);
+position: sticky; top: 0; z-index: 1000;
+margin: 6px 0 14px;
+padding: 8px 12px;
+display: grid; align-items: center;
+grid-template-columns: 52px 1fr 52px;           /* móvil */
+background: rgba(255,255,255,.86);
+border-bottom: 1px solid rgba(120,120,135,.14);
+backdrop-filter: saturate(160%) blur(6px);
+-webkit-backdrop-filter: saturate(160%) blur(6px);
 }
 
 /* Escritorio: reserva ~ancho del botón/hamburguesa */
 @media (min-width: 901px){
-  .tt-titlebar{ grid-template-columns: 74px 1fr 74px; }
+.tt-titlebar{ grid-template-columns: 74px 1fr 74px; }
 }
 
 /* Pastilla del título */
 .tt-titlebar .ttl{
-  justify-self: center;                      /* centrado real */
-  display: inline-block;
-  padding: 8px 16px;
-  font-size: 18px; font-weight: 700; letter-spacing: .2px;
-  color: #111827;
-  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
-  border: 1px solid rgba(120,120,135,.18);
-  border-radius: 999px;
-  box-shadow: 0 6px 16px rgba(0,0,0,.06);
-  line-height: 1.15 !important;
+justify-self: center;                      /* centrado real */
+display: inline-block;
+padding: 8px 16px;
+font-size: 18px; font-weight: 700; letter-spacing: .2px;
+color: #111827;
+background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
+border: 1px solid rgba(120,120,135,.18);
+border-radius: 999px;
+box-shadow: 0 6px 16px rgba(0,0,0,.06);
+line-height: 1.15 !important;
 }
 
 /* Subrayado sutil con degradado */
 .tt-titlebar .ttl::after{
-  content:"";
-  display:block;
-  height:2px; width:46px;
-  margin:6px auto 0;
-  background: linear-gradient(90deg,#6366f1,#f97316);
-  border-radius: 999px;
-  opacity: .9;
+content:"";
+display:block;
+height:2px; width:46px;
+margin:6px auto 0;
+background: linear-gradient(90deg,#6366f1,#f97316);
+border-radius: 999px;
+opacity: .9;
 }
 
 /* ——— Dark mode ——— */
 @media (prefers-color-scheme: dark){
-  .tt-titlebar{
+.tt-titlebar{
     background: rgba(11,15,25,.82);
     border-bottom: 1px solid #1f2937;
-  }
-  .tt-titlebar .ttl{
+}
+.tt-titlebar .ttl{
     color: #e5e7eb;
     background: linear-gradient(180deg, rgba(17,24,39,.95), rgba(17,24,39,.78));
     border-color: #1f2937;
     box-shadow: 0 6px 18px rgba(0,0,0,.35);
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3229,23 +3243,23 @@ st.markdown("""
 st.markdown("""
 <style>
 .tt-sticky-cta{
-  position: sticky;
-  bottom: 0;
-  z-index: 1200;
-  background: rgba(255,255,255,.95);
-  border-top: 1px solid rgba(120,120,135,.18);
-  backdrop-filter: saturate(160%) blur(6px);
-  -webkit-backdrop-filter: saturate(160%) blur(6px);
-  padding: 10px 12px;
-  margin-top: 8px;
-  /* sombra sutil */
-  box-shadow: 0 -6px 16px rgba(0,0,0,.06);
+position: sticky;
+bottom: 0;
+z-index: 1200;
+background: rgba(255,255,255,.95);
+border-top: 1px solid rgba(120,120,135,.18);
+backdrop-filter: saturate(160%) blur(6px);
+-webkit-backdrop-filter: saturate(160%) blur(6px);
+padding: 10px 12px;
+margin-top: 8px;
+/* sombra sutil */
+box-shadow: 0 -6px 16px rgba(0,0,0,.06);
 }
 @media (prefers-color-scheme: dark){
-  .tt-sticky-cta{
+.tt-sticky-cta{
     background: rgba(11,15,25,.86);
     border-top: 1px solid #1f2937;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3264,34 +3278,34 @@ st.markdown("""
 [data-testid="stTextArea"] textarea,
 [data-testid="stDateInput"] input,
 [data-baseweb="select"] > div{
-  min-height: 36px !important;
-  padding: 6px 10px !important;
-  border-radius: 8px !important;
+min-height: 36px !important;
+padding: 6px 10px !important;
+border-radius: 8px !important;
 }
 
 /* Etiquetas de widgets más pegadas y un pelín más chicas */
 [data-testid="stWidgetLabel"]{
-  margin-bottom: 2px !important;
-  font-size: 12px !important;
+margin-bottom: 2px !important;
+font-size: 12px !important;
 }
 
 /* Botones un poco más bajos y compactos */
 .stButton > button{
-  min-height: 36px !important;
-  padding: 8px 12px !important;
-  border-radius: 10px !important;
+min-height: 36px !important;
+padding: 8px 12px !important;
+border-radius: 10px !important;
 }
 
 /* Métricas con menos relleno */
 [data-testid="stMetric"]{
-  padding:10px 12px !important;
+padding:10px 12px !important;
 }
 
 /* Tablas/DataFrames: filas con menos alto */
 [data-testid="stDataFrame"] table td,
 [data-testid="stDataFrame"] table th{
-  padding-top:6px !important;
-  padding-bottom:6px !important;
+padding-top:6px !important;
+padding-bottom:6px !important;
 }
 
 /* Grids y tarjetas propias más ceñidas */
@@ -3307,13 +3321,13 @@ st.markdown("""
 /* Menú lateral (pestañas) aún más angosto y con menos padding */
 section[data-testid="stSidebar"] div[role="radiogroup"]{ gap:6px !important; }
 section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
-  padding:8px 9px !important;
-  border-radius:10px !important;
+padding:8px 9px !important;
+border-radius:10px !important;
 }
 
 /* Checkbox y radio un poco más pegados a su etiqueta */
 [data-testid="stCheckbox"] label, [role="radiogroup"] label{
-  gap:6px !important;
+gap:6px !important;
 }
 
 /* Formularios: quita aire arriba/abajo */
@@ -3329,71 +3343,71 @@ st.markdown("""
 <style id="typography-hierarchy-reset">
 /* ===== Variables para jerarquía de texto ===== */
 :root{
-  --h1: 24px;      /* desktop */
-  --h2: 20px;
-  --label: 12px;
-  --label-tracking: .06em;
-  --card-bg: var(--card);
-  --card-br: var(--border);
+--h1: 24px;      /* desktop */
+--h2: 20px;
+--label: 12px;
+--label-tracking: .06em;
+--card-bg: var(--card);
+--card-br: var(--border);
 }
 @media (max-width: 900px){
-  :root{
+:root{
     --h1: 22px;    /* móvil */
     --h2: 18px;
     --label: 11px;
-  }
+}
 }
 
 /* ===== Titulares (una sola jerarquía) ===== */
 h1, .tt-titlebar .ttl{
-  font-size: var(--h1) !important;
-  font-weight: 600 !important;  /* semi-bold */
-  letter-spacing: .01em;
-  text-transform: none;
+font-size: var(--h1) !important;
+font-weight: 600 !important;  /* semi-bold */
+letter-spacing: .01em;
+text-transform: none;
 }
 h2{
-  font-size: var(--h2) !important;
-  font-weight: 600 !important;
-  letter-spacing: .005em;
+font-size: var(--h2) !important;
+font-weight: 600 !important;
+letter-spacing: .005em;
 }
 
 /* ===== Labels de widgets (inputs, selects, etc.) ===== */
 div[data-testid="stWidgetLabel"] label{
-  font-size: var(--label) !important;
-  letter-spacing: var(--label-tracking) !important;
-  font-weight: 500 !important;
-  color: var(--muted) !important;
+font-size: var(--label) !important;
+letter-spacing: var(--label-tracking) !important;
+font-weight: 500 !important;
+color: var(--muted) !important;
 }
 
 /* ===== Unificar estilo de “card” (una sola estética, sin sombras fuertes) ===== */
 [data-testid="stMetric"],
 details[data-testid="stExpander"],
 .mm-card, .tt-card{
-  background: var(--card-bg) !important;
-  border: 1px solid var(--card-br) !important;
-  border-radius: 12px !important;
-  box-shadow: none !important;               /* sin sombras pesadas */
+background: var(--card-bg) !important;
+border: 1px solid var(--card-br) !important;
+border-radius: 12px !important;
+box-shadow: none !important;               /* sin sombras pesadas */
 }
 
 /* Quitar gradientes/relieves de icon pills y stats “tt-” */
 .tt-stat{
-  background: var(--card-bg) !important;
-  border: 1px solid var(--card-br) !important;
-  box-shadow: none !important;
+background: var(--card-bg) !important;
+border: 1px solid var(--card-br) !important;
+box-shadow: none !important;
 }
 .tt-stat .ic{
-  background: var(--pri) !important;        /* color liso */
-  box-shadow: none !important;
+background: var(--pri) !important;        /* color liso */
+box-shadow: none !important;
 }
 
 /* Titlebar más sobria y coherente con el resto */
 .tt-titlebar{
-  background: rgba(255,255,255,.92) !important;
-  border-bottom: 1px solid var(--card-br) !important;
-  box-shadow: none !important;
+background: rgba(255,255,255,.92) !important;
+border-bottom: 1px solid var(--card-br) !important;
+box-shadow: none !important;
 }
 @media (prefers-color-scheme: dark){
-  .tt-titlebar{ background: rgba(11,15,25,.88) !important; }
+.tt-titlebar{ background: rgba(11,15,25,.88) !important; }
 }
 
 /* Números “callout” sin negrita innecesaria */
@@ -3401,7 +3415,7 @@ details[data-testid="stExpander"],
 
 /* Zebra más suave en tablas (o quítala del todo) */
 [data-testid="stDataFrame"] table tbody tr:nth-child(odd){
-  background: transparent !important;
+background: transparent !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3409,17 +3423,17 @@ details[data-testid="stExpander"],
 st.markdown("""
 <style>
 .tt-titlebar .tt-user{
-  display:inline-block; padding:6px 10px; border-radius:999px;
-  border:1px solid rgba(120,120,135,.18);
-  background:rgba(255,255,255,.85);
-  backdrop-filter:saturate(160%) blur(6px);
-  -webkit-backdrop-filter:saturate(160%) blur(6px);
-  font-weight:600; color:#374151; white-space:nowrap;
+display:inline-block; padding:6px 10px; border-radius:999px;
+border:1px solid rgba(120,120,135,.18);
+background:rgba(255,255,255,.85);
+backdrop-filter:saturate(160%) blur(6px);
+-webkit-backdrop-filter:saturate(160%) blur(6px);
+font-weight:600; color:#374151; white-space:nowrap;
 }
 @media (prefers-color-scheme: dark){
-  .tt-titlebar .tt-user{
+.tt-titlebar .tt-user{
     background:rgba(11,15,25,.82); border-color:#1f2937; color:#e5e7eb;
-  }
+}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -3561,78 +3575,12 @@ if show("🧮 Diario Consolidado"):
     st.markdown(
         f'''
         <div class="mm-card">
-          <h4>Total de capital</h4>
-          <div class="mm-total">{money(total_capital)}</div>
+        <h4>Total de capital</h4>
+        <div class="mm-total">{money(total_capital)}</div>
         </div>
         ''',
         unsafe_allow_html=True
     )
-# ---------------------------------------------------------
-# Dashboard
-# ---------------------------------------------------------
-elif show("📊 Panel de control"):
-    v = read_ventas(); g = read_gastos()
-
-    c1, c2, c3 = st.columns(3, gap="small")
-    c1.metric("Ventas registradas", len(v))
-    c2.metric("Gastos registrados", len(g))
-    c3.metric("Total VENTA", money(float(v['venta'].sum()) if not v.empty else 0.0))
-
-    st.markdown("### Ventas por día")
-
-    if v.empty:
-        st.info("No hay ventas registradas.")
-    else:
-        # Selector de rango
-        rango = st.selectbox(
-            "Rango",
-            ["Últimos 30 días", "Últimos 90 días", "Año actual", "Todo"],
-            index=0,
-            key="DASH_rng"
-        )
-
-        dv = v.copy()
-        dv["fecha"] = pd.to_datetime(dv["fecha"], errors="coerce")
-        dv = dv.dropna(subset=["fecha"])
-        today = pd.Timestamp(date.today())
-
-        if rango == "Últimos 30 días":
-            start = today - pd.Timedelta(days=30)
-            dv = dv[dv["fecha"] >= start]
-        elif rango == "Últimos 90 días":
-            start = today - pd.Timedelta(days=90)
-            dv = dv[dv["fecha"] >= start]
-        elif rango == "Año actual":
-            start = pd.Timestamp(today.year, 1, 1)
-            dv = dv[(dv["fecha"] >= start) & (dv["fecha"] <= today)]
-        # "Todo" no filtra
-
-        # Serie diaria + media móvil 7d
-        serie = (
-            dv.groupby("fecha", as_index=False)["venta"]
-              .sum()
-              .sort_values("fecha")
-              .rename(columns={"venta": "Ventas"})
-        )
-        serie["Media 7d"] = serie["Ventas"].rolling(7, min_periods=1).mean()
-
-        st.line_chart(
-            serie.set_index("fecha")[["Ventas", "Media 7d"]],
-            use_container_width=True
-        )
-
-        # (Opcional) Breakdown por observación
-        with st.expander("Ver totales por observación"):
-            obs = (
-                dv.groupby("observacion", as_index=False)["venta"]
-                  .sum()
-                  .sort_values("venta", ascending=False)
-                  .rename(columns={"observacion": "Observación", "venta": "Ventas"})
-            )
-            if not obs.empty:
-                st.bar_chart(obs.set_index("Observación"), use_container_width=True)
-            else:
-                st.caption("Sin datos para este rango.")
 
 # ---------------------------------------------------------
 # Ventas
@@ -3672,32 +3620,38 @@ elif show("🧾 Ventas"):
 
     # Guardar
     if st.button("💾 Guardar venta", type="primary", key="VTA_submit_rt", disabled=invalid_paga):
-        insert_venta({
-            'fecha': str(VTA_fecha),
-            'cliente_nombre': VTA_cliente,
-            'costo': float(VTA_costo),
-            'venta': float(VTA_venta),
-            'ganancia': float(VTA_gan_calc),
-            'debe_flag': 1 if VTA_debe else 0,
-            'paga': 'X' if VTA_paga else '',
-            'abono1': float(VTA_ab1),
-            'abono2': float(VTA_ab2),
-            'observacion': obs_val,
-        })
+    # ✅ Validaciones anti-vacío
+        if not str(VTA_cliente).strip():
+            st.warning("Escribe el nombre del cliente.")
+        elif float(VTA_venta) <= 0:
+            st.warning("La venta debe ser mayor que 0.")
+        else:
+            insert_venta({
+                'fecha': str(VTA_fecha),
+                'cliente_nombre': VTA_cliente,
+                'costo': float(VTA_costo),
+                'venta': float(VTA_venta),
+                'ganancia': float(VTA_gan_calc),
+                'debe_flag': 1 if VTA_debe else 0,
+                'paga': 'X' if VTA_paga else '',
+                'abono1': float(VTA_ab1),
+                'abono2': float(VTA_ab2),
+                'observacion': "CUENTA" if VTA_debe else "EFECTIVO",
+            })
 
-        # 🔄 Limpiar widgets del formulario de Ventas
-        _reset_keys([
-            "VTA_fecha_rt", "VTA_cliente_rt", "VTA_debe_rt", "VTA_paga_rt", "VTA_obs_rt",
-            "VTA_costo_rt_txt", "VTA_venta_rt_txt", "VTA_ab1_rt_txt", "VTA_ab2_rt_txt",
-            "VTA_ganancia_view_rt"
-        ])
-        components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
-        clear_venta_form_rt()
-        finish_and_refresh("Venta guardada", ["transacciones"])
+            # 🔄 limpiar y refrescar como ya lo hacías
+            _reset_keys([
+                "VTA_fecha_rt","VTA_cliente_rt","VTA_debe_rt","VTA_paga_rt","VTA_obs_rt",
+                "VTA_costo_rt_txt","VTA_venta_rt_txt","VTA_ab1_rt_txt","VTA_ab2_rt_txt",
+                "VTA_ganancia_view_rt"
+            ])
+            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
+            clear_venta_form_rt()
+            finish_and_refresh("Venta guardada", ["transacciones"])
 
     st.divider()
 
-    # ===== A PARTIR DE AQUÍ TODO QUEDA DENTRO DEL ELIF =====
+    # ===== Listado (SIN acciones por fila) =====
     v = read_ventas()
     if not v.empty:
         # Precargar último estado de filtros (opcional)
@@ -3712,21 +3666,16 @@ elif show("🧾 Ventas"):
         st.session_state["ventas_last_text"]  = st.session_state.get(f"q_{flt_key}", "")
         st.session_state["ventas_last_rango"] = st.session_state.get(f"rng_{flt_key}", None)
 
-        # === NUEVO: Filtro por cliente (multi-select con búsqueda) ===
+        # Filtro por cliente(s)
         clientes = (
-            v["cliente_nombre"]
-            .astype(str).str.strip()
-            .replace({"nan":"", "None":"", "": None})
-            .dropna()
-            .unique()
-            .tolist()
+            v["cliente_nombre"].astype(str).str.strip()
+            .replace({"nan":"", "None":"", "": None}).dropna().unique().tolist()
         )
         clientes = sorted(clientes)
         cli_sel = st.multiselect("Filtrar por cliente(s)", options=clientes, key="ventas_cli")
         if cli_sel:
             patt = {c.strip().upper() for c in cli_sel}
             v = v[v["cliente_nombre"].astype(str).str.strip().str.upper().isin(patt)]
-        # === FIN NUEVO ===
 
         # Export CSV del resultado filtrado
         st.download_button(
@@ -3737,7 +3686,7 @@ elif show("🧾 Ventas"):
             use_container_width=True
         )
 
-        # Métricas y tablas
+        # Métricas
         v_num = v.copy()
         for col in ['costo','venta','ganancia']:
             v_num[col] = pd.to_numeric(v_num[col], errors='coerce').fillna(0.0)
@@ -3748,92 +3697,37 @@ elif show("🧾 Ventas"):
         tot_costos   = float(v_valid['costo'].sum())
         tot_ventas   = float(v_valid['venta'].sum())
         tot_ganancia = float(v_valid['ganancia'].sum())
-        tot_ventas_mostrar = tot_ventas + ADJ_VENTAS_EFECTIVO
 
         m1, m2, m3 = st.columns(3, gap="small")
         m1.metric("Costos totales",  money(tot_costos))
-        m2.metric("Ventas totales", money(tot_ventas))
+        m2.metric("Ventas totales",  money(tot_ventas))
         m3.metric("Ganancia total",  money(tot_ganancia))
 
         with st.expander("🔍 Detalle de ventas por observación", expanded=False):
-            det = (v_valid.groupby("observacion", dropna=False)["venta"]
-                   .sum().rename("VENTA").reset_index()
-                   .sort_values("VENTA", ascending=False))
+            det = (
+                v_valid.groupby("observacion", dropna=False)["venta"]
+                .sum().rename("VENTA").reset_index()
+                .sort_values("VENTA", ascending=False)
+            )
             det = df_format_money(det, ["VENTA"])
             st.dataframe(det, use_container_width=True)
-            st.caption(
-                f"Con ajuste: {money(float(v_valid['venta'].sum()) + ADJ_VENTAS_EFECTIVO)}"
-            )
+            st.caption(f"Con ajuste: {money(float(v_valid['venta'].sum()) + ADJ_VENTAS_EFECTIVO)}")
 
+        # Tabla simple (sin columna de acciones)
         cols = ['fecha','cliente_nombre','observacion','costo','venta','ganancia','debe_flag','paga','abono1','abono2']
-        v_show = v.sort_values('fecha', ascending=False)[cols]
+        v_show = v.sort_values('fecha', ascending=False)[cols].copy()
+        v_show['debe_flag'] = v_show['debe_flag'].fillna(0).astype(int).map({1: "SÍ", 0: "NO"})
         v_show = df_format_money(v_show, ['costo','venta','ganancia','abono1','abono2'])
-        st.dataframe(v_show, use_container_width=True)
-
-        # --- EDITOR: solo Abonos y PAGA editables, con formato ---
-        vv = v.sort_values('fecha', ascending=False).copy()
-
-        for c in ('abono1', 'abono2', 'venta'):
-            vv[c] = pd.to_numeric(vv[c], errors='coerce').fillna(0).astype(float)
-
-        # === ACCIONES POR FILA (popover por fila) ============================
-        st.markdown("### Acciones por fila")
-
-        # Toma las columnas completas para edición
-        vv_full = vv.sort_values('fecha', ascending=False).copy()
-
-        # (opcional) limita cuántas filas mostrar con acciones para no recargar la página
-        lim = st.number_input("Máx. filas a listar con acciones", 5, 200, value=50, step=5, key="ventas_row_actions_lim")
-        vv_act = vv_full.head(int(lim))
-
-        # Tabla solo para ver (sin edición)
-        v_show_actions = vv_act[['id','fecha','cliente_nombre','observacion','costo','venta','ganancia','debe_flag','abono1','abono2']].copy()
-        v_show_actions = df_format_money(v_show_actions, ['costo','venta','ganancia','abono1','abono2'])
-        st.dataframe(v_show_actions, use_container_width=True, hide_index=True)
-
-        st.divider()
-        st.markdown("#### Operar por fila (popover)")
-
-        for _, r in vv_act.iterrows():
-            rid = int(r['id'])
-            c1, c2 = st.columns([7,1], gap="small")
-            with c1:
-                tipo = 'DEBE' if int(r['debe_flag'])==1 else 'EFECTIVO'
-                st.caption(f"**#{rid}** {r['fecha']} · {r['cliente_nombre']} · {money(float(r['venta']))} · {tipo}")
-
-            # Botón que abre popover con edición rápida
-            with c2:
-                with st.popover(f"⋯  #{rid}", use_container_width=True):
-                    st.markdown(f"**Venta #{rid}** — edición rápida")
-                    # Edición rápida (campos más usados)
-                    e_ab1 = st.number_input("Abono 1", min_value=0.0, value=float(_nz(r['abono1'])), step=100.0, key=f"pop_ab1_{rid}")
-                    e_ab2 = st.number_input("Abono 2", min_value=0.0, value=float(_nz(r['abono2'])), step=100.0, key=f"pop_ab2_{rid}")
-                    e_paga = st.checkbox("PAGA (pagó hoy)", value=str(r.get('paga','')).strip().upper()=='X', key=f"pop_paga_{rid}")
-
-                    # Acciones
-                    bcol1, bcol2, bcol3 = st.columns([1,1,2],gap="small")
-                    if bcol1.button("Guardar", key=f"pop_save_{rid}"):
-                        payload = {}
-                        if float(e_ab1) != float(_nz(r['abono1'])): payload['abono1'] = float(e_ab1)
-                        if float(e_ab2) != float(_nz(r['abono2'])): payload['abono2'] = float(e_ab2)
-                        if ('X' if e_paga else '') != str(r.get('paga','')).strip(): payload['paga'] = 'X' if e_paga else ''
-                        if payload:
-                            update_venta_fields(rid, **payload)
-                        finish_and_refresh(f"Venta #{rid} actualizada.", ["transacciones"])
-
-                    # Borrado con confirmación en el propio popover
-                    conf = bcol2.checkbox("Confirmar 🗑️", key=f"pop_conf_{rid}")
-                    if bcol2.button("Eliminar", disabled=not conf, key=f"pop_del_{rid}"):
-                        delete_venta_id(rid)
-                        finish_and_refresh(f"Venta #{rid} eliminada.", ["transacciones"])
-
-        # === FIN ACCIONES POR FILA (popover) =================================
+        st.dataframe(v_show, use_container_width=True, hide_index=True)
+    else:
+        st.info("Sin ventas registradas aún.")
 
 
 
 # ====== Editor en bloque (abonos / PAGA) ======
 # Base para edición masiva: solo columnas necesarias + bandera PAGA booleana
-        vv_editor = vv_full[['id','fecha','cliente_nombre','venta','abono1','abono2','paga']].copy()
+        vv_editor = v[['id','fecha','cliente_nombre','venta','abono1','abono2','paga']].copy()
+        vv_editor['paga'] = vv_editor['paga'].fillna('')
         vv_editor['PAGA'] = vv_editor['paga'].astype(str).str.strip().str.upper().eq('X')
         vv_editor.drop(columns=['paga'], inplace=True)
         vv_editor['🗑️ Eliminar'] = False
@@ -3951,15 +3845,21 @@ elif show("💸 Gastos"):
         GTO_submit = st.form_submit_button("💾 Guardar gasto")
 
     if GTO_submit and GTO_fecha is not None:
-        insert_gasto({
-            'fecha': str(GTO_fecha),
-            'concepto': GTO_conc,
-            'valor': float(GTO_valor),
-            'notas': GTO_notas
-        })
-        components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
-        clear_gasto_form()
-        finish_and_refresh("Gasto guardado", ["gastos"])
+    # ✅ Validaciones anti-vacío
+        if not str(GTO_conc).strip():
+            st.warning("El concepto es obligatorio.")
+        elif float(GTO_valor) <= 0:
+            st.warning("El valor debe ser mayor que 0.")
+        else:
+            insert_gasto({
+                'fecha': str(GTO_fecha),
+                'concepto': GTO_conc,
+                'valor': float(GTO_valor),
+                'notas': GTO_notas
+            })
+            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
+            clear_gasto_form()
+            finish_and_refresh("Gasto guardado", ["gastos"])
 
     st.divider()
 
@@ -4056,10 +3956,15 @@ elif show("🤝 Préstamos"):
         PRE_submit = st.form_submit_button("💾 Guardar préstamo", use_container_width=True)
 
     if PRE_submit:
-        insert_prestamo({"nombre": PRE_nombre, "valor": float(PRE_valor)})
-        # Limpia estado para próximo rerun
-        _reset_keys(["PRE_nombre", "PRE_valor", "PRE_valor_txt"])
-        finish_and_refresh("Préstamo guardado", ["prestamos"])
+    # ✅ Validaciones anti-vacío
+        if not str(PRE_nombre).strip():
+            st.warning("El nombre es obligatorio.")
+        elif float(PRE_valor) <= 0:
+            st.warning("El valor del préstamo debe ser mayor que 0.")
+        else:
+            insert_prestamo({"nombre": PRE_nombre, "valor": float(PRE_valor)})
+            _reset_keys(["PRE_nombre", "PRE_valor", "PRE_valor_txt"])
+            finish_and_refresh("Préstamo guardado", ["prestamos"])
 
     st.divider()
 
@@ -4163,9 +4068,15 @@ elif show("📦 Inventario"):
             INV_costo = st.number_input("Valor costo", min_value=0.0, value=0.0, step=100.0, key="INV_valor_costo")
         INV_submit = st.form_submit_button("💾 Guardar ítem")
     if INV_submit:
-        insert_inventario({'producto': INV_prod, 'valor_costo': float(INV_costo)})
-        clear_inventario_form()
-        finish_and_refresh("Ítem guardado", ["inventario"])
+    # ✅ Validaciones anti-vacío
+        if not str(INV_prod).strip():
+            st.warning("El nombre del producto es obligatorio.")
+        elif float(INV_costo) <= 0:
+            st.warning("El valor costo debe ser mayor que 0.")
+        else:
+            insert_inventario({'producto': INV_prod, 'valor_costo': float(INV_costo)})
+            clear_inventario_form()
+            finish_and_refresh("Ítem guardado", ["inventario"])
 
     st.divider()
     i = read_inventario()
@@ -4316,7 +4227,7 @@ elif show("⚙️ Mi Cuenta"):
     # Enlace a la hoja
     try:
         sh, _ = _gs_open_or_create_user_book(user)   # ahora la función ya no revienta
-        st.link_button("Abrir mi hoja en Google Sheets", sh.url, use_container_width=True)
+        st.markdown(f'[Abrir mi hoja en Google Sheets]({sh.url})')
     except Exception as e:
         st.warning(f"No se pudo abrir el enlace del respaldo: {e}")
 
@@ -4393,8 +4304,8 @@ if is_admin() and show("🛠️ Administración"):
 
             current_role = dfu.loc[dfu["username"]==sel_user,"role"].iloc[0]
             new_role2 = np2.selectbox("Rol", ["user","admin"],
-                                      index=0 if current_role=="user" else 1,
-                                      key="USR_newrole2")
+                                    index=0 if current_role=="user" else 1,
+                                    key="USR_newrole2")
             if np2.button("Actualizar rol", key="USR_update_role"):
                 if sel_user == user and new_role2 != "admin":
                     st.error("No puedes quitarte el rol admin a ti mismo.")
@@ -4469,7 +4380,7 @@ if is_admin() and show("🛠️ Administración"):
             # descarga
             csv = df_aud.to_csv(index=False).encode("utf-8-sig")
             st.download_button("⬇️ Exportar auditoría CSV", csv,
-                               file_name=f"audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                            file_name=f"audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
 
             # purga opcional
             colp1, colp2 = st.columns([1,3], gap="small")
