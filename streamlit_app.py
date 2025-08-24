@@ -1703,6 +1703,26 @@ def update_inventario_fields(row_id: int, **changes) -> bool:
 # =========================================================
 # Helpers UI
 # =========================================================
+
+# --- Compat: popover o expander según versión ---
+def open_action_panel(label: str, key: str | None = None):
+    """
+    Devuelve un contenedor tipo popover si existe; si no, cae a expander.
+    Evita kwargs no soportados (p.ej. use_container_width).
+    """
+    try:
+        if hasattr(st, "popover"):
+            # algunas versiones no aceptan use_container_width
+            return st.popover(label, key=key)
+    except TypeError:
+        # firma distinta: vuelve a intentar sin key
+        try:
+            return st.popover(label)
+        except Exception:
+            pass
+    # Fallback universal
+    return st.expander(label)
+
 def money(x: float) -> str:
     try:
         return f"($ {abs(x):,.0f})" if x < 0 else f"$ {x:,.0f}"
@@ -3743,7 +3763,7 @@ elif show("🧾 Ventas"):
             # Acciones
             with c5:
                 # --- EDITAR ---
-                pop = st.popover("✏️ Editar", use_container_width=True, key=f"pop_edit_{rid}")
+                pop  = open_action_panel("✏️ Editar",   key=f"pop_edit_{rid}")
                 with pop:
                     ef1, ef2 = st.columns(2, gap="small")
                     fecha_new = ef1.date_input("Fecha",
@@ -3800,7 +3820,7 @@ elif show("🧾 Ventas"):
                                 st.error("No se pudo actualizar (¿permisos o fila no encontrada?).")
 
                 # --- ELIMINAR ---
-                popd = st.popover("🗑️ Eliminar", use_container_width=True, key=f"pop_del_{rid}")
+                popd = open_action_panel("🗑️ Eliminar", key=f"pop_del_{rid}")
                 with popd:
                     st.warning("¿Eliminar esta venta? Esta acción no se puede deshacer.")
                     if st.button("Confirmar eliminación", key=f"del_btn_{rid}"):
