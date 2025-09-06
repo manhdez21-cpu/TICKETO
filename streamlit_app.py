@@ -408,7 +408,6 @@ import numpy as np
 import re
 import gspread
 import os, json, hmac, base64, time
-import extra_streamlit_components as stx
 try:
     import extra_streamlit_components as stx
 except Exception:
