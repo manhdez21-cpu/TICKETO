@@ -48,7 +48,6 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-from __future__ import annotations
 import os
 import streamlit as st
 
