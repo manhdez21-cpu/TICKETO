@@ -48,6 +48,27 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from __future__ import annotations
+import os
+import streamlit as st
+
+# ✳️ PRIMERA y ÚNICA llamada de Streamlit:
+st.set_page_config(
+    page_title="Control de Gastos y Ventas",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# Flags de arranque (pueden ir aquí sin problema)
+os.environ.setdefault("BYPASS_BOOT", "1")
+os.environ.setdefault("DISABLE_COMPACT", "1")
+
+# (Opcional) Smoke test: debe ir DESPUÉS de set_page_config
+if os.environ.get("SMOKETEST", "0") == "1":
+    st.write("✅ Cloud OK")
+    st.stop()
+
+
 DB_FILE = Path("finanzas.sqlite")
 
 @contextmanager
@@ -63,12 +84,6 @@ def get_conn():
 
 import streamlit as st
 import streamlit.components.v1 as components 
-
-st.set_page_config(
-    page_title="Control Finanzas",
-    layout="wide",
-    initial_sidebar_state="expanded",   # ← antes estaba "collapsed"
-)
 
 st.write("🟢 Arrancando interfaz… (modo mínimo)")
 
@@ -99,7 +114,7 @@ def _ensure_compact_query_params():
     except Exception:
         st.session_state["_qp_once"] = True
 
-if os.environ.get("DISABLE_COMPACT", "0") != "1":
+if os.environ.get("DISABLE_COMPACT", "1") != "1":
     _ensure_compact_query_params()
 
 
