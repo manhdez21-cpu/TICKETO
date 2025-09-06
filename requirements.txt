@@ -7,3 +7,5 @@ openpyxl
 xlsxwriter
 gspread
 google-auth
+SQLAlchemy
+psycopg2-binary
