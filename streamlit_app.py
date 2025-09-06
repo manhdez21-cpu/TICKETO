@@ -24,6 +24,58 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# --- Compact modes ---------------------------------------------------------
+def _get_compact_level() -> int:
+    # Lee ?compact=... de la URL (Streamlit >=1.31 expone st.query_params como mapping)
+    try:
+        val = st.query_params.get("compact", "0")
+        return int(val) if str(val).isdigit() else 0
+    except Exception:
+        return 0
+
+def _apply_compact_css(level: int = 1):
+    if level <= 0:
+        return
+    # Base: compacto (compact=1)
+    css_base = """
+    <style>
+      /* quita bordes/márgenes globales */
+      .block-container{padding:0.2rem 0.6rem 0.5rem 0.6rem;}
+      /* oculta cromo */
+      header, footer, #MainMenu{visibility:hidden;}
+      [data-testid="stDecoration"], [data-testid="stToolbar"]{display:none;}
+      /* inputs y botones más chicos */
+      .stButton>button{padding:0.35rem 0.8rem; line-height:1.1; min-height:2rem; font-size:0.95rem;}
+      .stTextInput input, .stPassword input{padding:0.25rem 0.5rem; min-height:2.1rem; font-size:0.95rem;}
+      /* menos separación entre bloques/columnas/forms */
+      [data-testid="stVerticalBlock"], [data-testid="stForm"]{gap:0.45rem;}
+      [data-testid="stHorizontalBlock"]{gap:0.5rem;}
+      /* sidebar también compacto */
+      [data-testid="stSidebar"] .block-container{padding-top:0.5rem;}
+    </style>
+    """
+    st.markdown(css_base, unsafe_allow_html=True)
+
+    # Ultra: aún más compacto (compact=2)
+    if level >= 2:
+        css_ultra = """
+        <style>
+          .block-container{padding:0.1rem 0.4rem 0.25rem 0.4rem;}
+          .stButton>button{padding:0.20rem 0.60rem; min-height:1.8rem; font-size:0.88rem;}
+          .stTextInput input, .stPassword input{padding:0.15rem 0.40rem; min-height:1.85rem; font-size:0.9rem;}
+          [data-testid="stVerticalBlock"], [data-testid="stForm"]{gap:0.30rem;}
+          [data-testid="stHorizontalBlock"]{gap:0.35rem;}
+          /* tablas un poco más apretadas */
+          [data-testid="stDataFrame"] {margin-top:0.25rem;}
+        </style>
+        """
+        st.markdown(css_ultra, unsafe_allow_html=True)
+
+# LEE EL NIVEL Y APLICA CSS (hazlo temprano en el script)
+_compact_level = _get_compact_level()
+_apply_compact_css(_compact_level)
+
+
 import os
 os.environ.setdefault("BYPASS_BOOT", "1")      # salta ping a Neon → arranca offline
 os.environ.setdefault("DISABLE_COMPACT", "1")  # no fuerza ?compact=1&m=1 (evita loop)
@@ -83,12 +135,11 @@ st.write("🟢 Arrancando interfaz… (modo mínimo)")
 
 # --- Forzar compact por URL sin JS ni DOM hacks ---
 def _ensure_compact_query_params():
-    # Usa API nueva si está disponible
     try:
-        qp = st.query_params  # Streamlit >= 1.31
+        qp = st.query_params
         changed = False
-        if qp.get("compact") != "1":
-            qp["compact"] = "1"; changed = True
+        if qp.get("compact") != "2":   # ← antes "1"
+            qp["compact"] = "2"; changed = True
         if qp.get("m") != "1":
             qp["m"] = "1"; changed = True
         if changed and not st.session_state.get("_qp_once"):
@@ -99,10 +150,9 @@ def _ensure_compact_query_params():
         return
     except Exception:
         pass
-    # Fallback API antigua
     try:
         if not st.session_state.get("_qp_once"):
-            st.experimental_set_query_params(compact="1", m="1")
+            st.experimental_set_query_params(compact="2", m="1")  # ← antes "1"
             st.session_state["_qp_once"] = True
             st.rerun()
     except Exception:
