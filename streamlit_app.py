@@ -13,6 +13,10 @@ import auth_db as AUTH
 from io import BytesIO
 from datetime import datetime
 
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+
 # ✳️ PRIMERA y ÚNICA llamada de Streamlit:
 st.set_page_config(
     page_title="Control de Gastos y Ventas",
@@ -50,7 +54,10 @@ if os.environ.get("BYPASS_BOOT", "1") != "1":
 else:
     st.session_state["AUTH_OFFLINE"] = True
 
-DB_FILE = Path("finanzas.sqlite")
+# --- SQLite: una sola ruta consistente bajo ./data ---
+DB_DIR = Path(__file__).parent / "data"
+DB_DIR.mkdir(parents=True, exist_ok=True)
+DB_FILE = DB_DIR / "finanzas.sqlite"
 
 @contextmanager
 def get_conn():
@@ -396,7 +403,6 @@ margin:0 !important; padding:0 !important; min-height:0 !important; line-height:
 
 # ====== Imports básicos ======
 from datetime import date, timedelta, datetime
-import sqlite3
 import pandas as pd
 import numpy as np
 import re
@@ -410,14 +416,6 @@ except Exception:
     st.warning("extra-streamlit-components no está instalado; usando sesión básica.")
 import math
 
-
-
-# ---------------------------------------------------------
-# Ajuste visual por defecto (se puede cambiar en Admin)
-# ---------------------------------------------------------
-DB_DIR  = Path(__file__).parent / "data"
-DB_DIR.mkdir(parents=True, exist_ok=True)
-DB_FILE = DB_DIR / "finanzas.sqlite"
 
 def _db_sig() -> tuple[int, int]:
     """Firma del archivo SQLite para invalidar la cache cuando cambie."""
