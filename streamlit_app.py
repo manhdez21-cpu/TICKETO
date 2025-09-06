@@ -63,6 +63,36 @@ st.set_page_config(
     initial_sidebar_state="expanded",   # ← antes estaba "collapsed"
 )
 
+# --- Forzar compact por URL sin JS ni DOM hacks ---
+def _ensure_compact_query_params():
+    # Usa API nueva si está disponible
+    try:
+        qp = st.query_params  # Streamlit >= 1.31
+        changed = False
+        if qp.get("compact") != "1":
+            qp["compact"] = "1"; changed = True
+        if qp.get("m") != "1":
+            qp["m"] = "1"; changed = True
+        if changed and not st.session_state.get("_qp_once"):
+            st.session_state["_qp_once"] = True
+            st.rerun()
+        else:
+            st.session_state["_qp_once"] = True
+        return
+    except Exception:
+        pass
+    # Fallback API antigua
+    try:
+        if not st.session_state.get("_qp_once"):
+            st.experimental_set_query_params(compact="1", m="1")
+            st.session_state["_qp_once"] = True
+            st.rerun()
+    except Exception:
+        st.session_state["_qp_once"] = True
+
+_ensure_compact_query_params()
+
+
 
 st.markdown("""
 <style>
@@ -87,25 +117,25 @@ margin:0 !important; padding:0 !important; min-height:0 !important; line-height:
 </style>
 """, unsafe_allow_html=True)
 
-components.html("""
-<script>
-(function(){
-  try{
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
-    if (window._tt_compact_applied) return;         // ← fusible
-    var url = new URL(window.location.href);
-    var changed = false;
-    if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
-    if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
-    if (changed){
-      window._tt_compact_applied = true;            // ← marca
-      history.replaceState(null, "", url.toString());
-      setTimeout(function(){ location.reload(); }, 0);
-    }
-  }catch(e){}
-})();
-</script>
-""", height=0, width=0)
+# components.html("""
+# <script>
+# (function(){
+#   try{
+#     if (!window.matchMedia("(max-width: 900px)").matches) return;
+#     if (window._tt_compact_applied) return;         // ← fusible
+#     var url = new URL(window.location.href);
+#     var changed = false;
+#     if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
+#     if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
+#     if (changed){
+#       window._tt_compact_applied = true;            // ← marca
+#       history.replaceState(null, "", url.toString());
+#       setTimeout(function(){ location.reload(); }, 0);
+#     }
+#   }catch(e){}
+# })();
+# </script>
+# """, height=0, width=0)
 
 import hashlib
 from pathlib import Path
