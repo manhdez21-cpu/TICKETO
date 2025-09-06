@@ -6,14 +6,63 @@
 #.\.venv\Scripts\Activate
 
 from __future__ import annotations
+
+import streamlit as st
+import traceback
+import auth_db as AUTH
+from io import BytesIO
+from datetime import datetime
+
+import os
+
+def safe_boot():
+    # 1) Prueba de vida muy rápida
+    try:
+        AUTH.ping()  # SELECT 1
+    except Exception as e:
+        st.session_state["AUTH_OFFLINE"] = True
+        st.warning("No pude conectar con la BD de usuarios (Neon). La app arrancará en modo offline.")
+        st.exception(e)  # opcional para ver el porqué
+        return
+
+    # 2) Si hay conexión, corre migraciones/seed
+    try:
+        AUTH.init_users_table()
+        AUTH.ensure_admin_seed()
+    except Exception as e:
+        st.session_state["AUTH_OFFLINE"] = True
+        st.warning("Fallo inicializando la tabla de usuarios; inicio en modo offline.")
+        st.exception(e)  # opcional
+
+safe_boot()
+
+
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+
+DB_FILE = Path("finanzas.sqlite")
+
+@contextmanager
+def get_conn():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
 import streamlit as st
 import streamlit.components.v1 as components 
 
 st.set_page_config(
-    page_title="Control de Gastos y Ventas",
+    page_title="Control Finanzas",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded",   # ← antes estaba "collapsed"
 )
+
 
 st.markdown("""
 <style>
@@ -41,17 +90,19 @@ margin:0 !important; padding:0 !important; min-height:0 !important; line-height:
 components.html("""
 <script>
 (function(){
-try{
+  try{
     if (!window.matchMedia("(max-width: 900px)").matches) return;
+    if (window._tt_compact_applied) return;         // ← fusible
     var url = new URL(window.location.href);
     var changed = false;
     if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
     if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
     if (changed){
-    history.replaceState(null, "", url.toString());
-    setTimeout(function(){ location.reload(); }, 0);
+      window._tt_compact_applied = true;            // ← marca
+      history.replaceState(null, "", url.toString());
+      setTimeout(function(){ location.reload(); }, 0);
     }
-}catch(e){}
+  }catch(e){}
 })();
 </script>
 """, height=0, width=0)
@@ -356,8 +407,7 @@ if not APP_SECRET:
     APP_SECRET = "cambia_esta_clave_larga_y_unica"
 
 if APP_SECRET == "cambia_esta_clave_larga_y_unica" and not ALLOW_DEFAULT_SECRET:
-    st.error("APP_SECRET no configurado. Define APP_SECRET en Secrets o variables de entorno.")
-    st.stop()
+    st.warning("APP_SECRET no configurado; define APP_SECRET o ALLOW_DEFAULT_SECRET=1 en desarrollo.")
 
 SESSION_COOKIE = "finz_sess"
 LOGOUT_SENTINEL = "__force_logout"
@@ -450,6 +500,7 @@ def _issue_session(username: str, role: str):
         path="/", secure=COOKIE_SECURE_FLAG, same_site="Lax")
     st.session_state["auth_user"] = username
     st.session_state["auth_role"] = role
+    st.session_state["user"] = {"username": username, "role": role}
     st.session_state.pop(LOGOUT_SENTINEL, None)
 
 def _clear_session():
@@ -557,14 +608,6 @@ CREATE TABLE IF NOT EXISTS deudores_ini (
     nombre TEXT,
     valor REAL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    pw_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now'))
-);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT DEFAULT (datetime('now')),
@@ -575,12 +618,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
     details TEXT
 );
 """
-
-def get_conn():
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
-    return conn
 
 def _col_exists(conn: sqlite3.Connection, table: str, col: str) -> bool:
     cur = conn.execute(f"PRAGMA table_info({table})")
@@ -709,98 +746,19 @@ def migrate_to_per_user_data():
 
 migrate_to_per_user_data()
 
-# ========= Gestión de usuarios (SQLite) =========
-def db_get_user(username: str):
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT username, pw_hash, role, is_active FROM users WHERE username=?",
-            (username,)
-        ).fetchone()
-    if not row:
-        return None
-    return {"username": row[0], "pw": row[1], "role": row[2], "active": bool(row[3])}
-
-def db_list_users() -> pd.DataFrame:
-    with get_conn() as conn:
-        df = pd.read_sql_query(
-            "SELECT username, role, is_active AS activo, created_at FROM users ORDER BY username",
-            conn
-        )
-    return df
-
-def db_create_user(username: str, password: str, role: str = "user"):
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT INTO users (username, pw_hash, role) VALUES (?, ?, ?)",
-            (username.strip(), hash_password(password), role)
-        )
-    audit("user.create", table_name="users", after={"username": username.strip(), "role": role})
-
-def db_set_password(username: str, new_password: str):
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE users SET pw_hash=? WHERE username=?",
-            (hash_password(new_password), username.strip())
-        )
-    audit("user.password.change", table_name="users", after={"username": username.strip()})
-
-def db_set_role(username: str, role: str):
-    old = db_get_user(username)
-    with get_conn() as conn:
-        conn.execute("UPDATE users SET role=? WHERE username=?", (role, username.strip()))
-    audit("user.role.change", table_name="users",
-        before={"username": username.strip(), "role": old["role"] if old else None},
-        after={"username": username.strip(), "role": role})
-
-def db_delete_user(username: str):
-    u = (username or "").strip()
-    # 🚫 No permitir borrar la cuenta admin
-    if u.lower() == "admin":
-        raise ValueError("No se puede eliminar el usuario 'admin'.")
-
-    # (opcional) Evitar que te borres a ti mismo por accidente
-    try:
-        cur_user = (st.session_state.get("auth_user") or "").strip().lower()
-        if u.lower() == cur_user:
-            raise ValueError("No puedes eliminar la sesión/usuario con el que estás logueado.")
-    except Exception:
-        pass
-
-    old = db_get_user(u)
-    with get_conn() as conn:
-        conn.execute("DELETE FROM users WHERE username=?", (u,))
-    audit("user.delete", table_name="users",
-          before={"username": u, "role": old["role"] if old else None})
-
-def ensure_admin_seed():
-    try:
-        with get_conn() as conn:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO users (username, pw_hash, role)
-                VALUES (?, ?, ?)
-                """,
-                ("admin", hash_password("admin123"), "admin"),
-            )
-            # Garantiza rol/activo sin tocar password si ya existía
-            conn.execute("UPDATE users SET role='admin', is_active=1 WHERE username='admin'")
-    except Exception as e:
-        print("ensure_admin_seed error:", e)  
-
-ensure_admin_seed() 
-
 # ========== Login form ==========
+
 def login_form() -> None:
-    # Tarjeta bonita para el login (también en dark mode)
+    # Tarjeta bonita para el login
     st.markdown("""
     <style>
     .login-card{
-    max-width: 520px; margin: 6vh auto; padding: 20px 22px;
-    border:1px solid rgba(120,120,135,.18); border-radius:14px; background:#fff;
-    box-shadow:0 6px 18px rgba(0,0,0,.06);
+      max-width:520px;margin:6vh auto;padding:20px 22px;
+      border:1px solid rgba(120,120,135,.18);border-radius:14px;background:#fff;
+      box-shadow:0 6px 18px rgba(0,0,0,.06);
     }
     @media (prefers-color-scheme: dark){
-    .login-card{ background:#0b0f19; border-color:#1f2937; }
+      .login-card{ background:#0b0f19;border-color:#1f2937; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -817,57 +775,80 @@ def login_form() -> None:
 
     if ok:
         uname = username.strip()
+        src = "neon"
+        auth = None
+        try:
+            # 1) Intento normal contra Neon
+            auth = AUTH.authenticate(uname, password)
+        except Exception as e:
+            # 2) Si Neon falla, marca offline y avisa
+            st.session_state["AUTH_OFFLINE"] = True
+            st.info("No se pudo validar en Neon. Probando usuarios DEMO (si están habilitados).")
+            st.exception(e)
 
-        # 1) Busca en SQLite
-        urec = db_get_user(uname)
-        if urec and urec["active"] and verify_password(password, urec["pw"]):
+        # 3) Fallback DEMO (solo si activas DEV_DEMO_USERS=1)
+        if (not auth) and DEV_DEMO and uname in USERS and verify_password(password, USERS[uname]["pw"]):
+            auth = {"username": uname, "role": USERS[uname]["role"]}
+            src = "demo"
+
+        if auth:
             st.session_state["sess_ttl"] = 7*24*3600 if remember else 12*3600
-            _issue_session(uname, urec["role"])
-            audit("login.success", extra={
-                "remember": bool(remember),
-                "role": urec["role"],
-                "src": "sqlite",
-                "user_try": uname
-            })
-            st.success("Bienvenido 👋")
-            st.rerun()
+            _issue_session(auth["username"], auth["role"])
+            audit("login.success", extra={"remember": bool(remember), "role": auth["role"], "src": src, "user_try": uname})
+            st.success("Bienvenido 👋"); st.rerun()
         else:
-            # Si el usuario existe pero está inactivo, no intentes DEMO
-            if urec and not urec["active"]:
-                audit("login.disabled", extra={"user_try": uname})
-                st.error("Cuenta deshabilitada")
-                st.stop()
-
-            # 2) Fallback DEMO solo si está habilitado **y NO existe en SQLite**
-            if DEV_DEMO and urec is None:
-                u_demo = USERS.get(uname)
-                if u_demo and verify_password(password, u_demo["pw"]):
-                    st.session_state["sess_ttl"] = 7*24*3600 if remember else 12*3600
-                    _issue_session(uname, u_demo.get("role", "user"))
-                    audit("login.success", extra={
-                        "remember": bool(remember),
-                        "role": u_demo.get("role", "user"),
-                        "src": "demo",
-                        "user_try": uname
-                    })
-                    st.success("Bienvenido 👋")
-                    st.rerun()
-                    return
-
-            audit("login.failed", extra={"user_try": uname})
-            st.error("Usuario o contraseña inválidos")
+            audit("login.failed", extra={"user_try": uname, "src": src})
+            st.error("Usuario o contraseña inválidos (o autenticación offline sin DEMO).")    
 
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-def require_user() -> tuple[str, str]:
-    u, r = current_user()
-    if not u:
-        login_form()  # stop
-    return u, r
+
+def require_user():
+    # si ya hay sesión, retorna
+    if "user" in st.session_state and st.session_state["user"]:
+        u = st.session_state["user"]
+        return u["username"], u["role"]
+
+    # 👉 mostrar formulario de login en el cuerpo y cortar el render aquí
+    login_form()   # tu login central ya dibuja y al final hace st.stop()
+    st.stop()
+    
+    # si no hay sesión, muestra login en la sidebar mínima y bloquea el resto
+    with st.sidebar:
+        st.subheader("Iniciar sesión")
+        u = st.text_input("Usuario", key="login_user")
+        p = st.text_input("Contraseña", type="password", key="login_pass")
+        go = st.button("Ingresar", type="primary", key="login_btn")
+
+        if go:
+            src = "neon"
+            auth = None
+            try:
+                # 1) Intento Neon
+                auth = AUTH.authenticate(u, p)
+            except Exception as e:
+                st.session_state["AUTH_OFFLINE"] = True
+                st.info("Auth Neon caída; probando usuarios DEMO (si están habilitados).")
+                st.exception(e)
+
+            # 2) Fallback DEMO
+            if (not auth) and DEV_DEMO and u in USERS and verify_password(p, USERS[u]["pw"]):
+                auth = {"username": u, "role": USERS[u]["role"]}
+                src = "demo"
+
+            if auth:
+                st.session_state["user"] = auth
+                st.session_state.pop("nav_left", None)
+                st.rerun()
+            else:
+                st.error("No fue posible validarte.")
+
+    st.stop()  # evita que se renderice el resto sin login
 
 def is_admin() -> bool:
-    return st.session_state.get("auth_role") == "admin"
+    u = st.session_state.get("user") or {}
+    return str(u.get("role", "")).strip().lower() == "admin"
 
 def _row_owner() -> str:
     # Quién es el dueño de la fila que se inserta
@@ -1250,6 +1231,40 @@ def extract_deudores_ini_from_xls(xls: pd.ExcelFile, sheet_name: str) -> pd.Data
     out = out[(out['nombre'] != "") & (out['valor'] > 0)]
     out = out.groupby('nombre', as_index=False)['valor'].sum()
     return out[['nombre','valor']]
+
+def _df_to_csv_bytes(df):
+    buf = BytesIO()
+    # utf-8-sig para que Excel abra con acentos bien
+    buf.write(df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig"))
+    buf.seek(0)
+    return buf
+
+def _sync_users_to_google_sheets(df, sheet_id: str):
+    """
+    Envía el DF de usuarios a una hoja llamada 'users'.
+    Requiere credenciales de Service Account en secrets:
+      st.secrets['gcp_service_account']  (dict del JSON)
+    """
+    import gspread  # carga perezosa
+    # 1) Credenciales
+    sa_dict = st.secrets.get("gcp_service_account") or st.secrets.get("google_service_account")
+    if not sa_dict:
+        st.error("Faltan credenciales en secrets: `gcp_service_account` (JSON de Service Account).")
+        return False
+
+    gc = gspread.service_account_from_dict(sa_dict)
+    # 2) Abre por ID
+    sh = gc.open_by_key(sheet_id)
+    # 3) Worksheet 'users' (crea si no existe)
+    try:
+        ws = sh.worksheet("users")
+    except Exception:
+        ws = sh.add_worksheet(title="users", rows=100, cols=10)
+    # 4) Sobrescribe contenido
+    values = [list(df.columns)] + df.astype(str).values.tolist()
+    ws.clear()
+    ws.update("A1", values)
+    return True
 
 # --- Helpers seguros para DB / casting ---
 def _to_date_str(v):
@@ -2118,6 +2133,18 @@ def stat_min(label: str, value: str, tone: str = "var(--pri)"):
         unsafe_allow_html=True
     )
 
+def _secret(name, default=""):
+    try:
+        return st.secrets.get(name, default)  # si el archivo está mal, lo atrapamos abajo
+    except Exception:
+        return default
+
+def _auth_db_available() -> bool:
+    try:
+        st.connection("auth_db", type="sql")  # solo prueba que existe la config
+        return True
+    except Exception:
+        return False
 
 # =========================
 # Google Sheets Sync
@@ -2243,14 +2270,7 @@ def _gs_read_df(ws_title: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def _db_is_completely_empty() -> bool:
-    # Cuenta SOLO usuarios no-admin. Si solo existe el admin semilla, permitimos restaurar.
-    non_admin = 0
-    try:
-        with get_conn() as conn:
-            non_admin = int(conn.execute("SELECT COUNT(*) FROM users WHERE username != 'admin'").fetchone()[0])
-    except Exception:
-        non_admin = 0
-
+    # Cuenta SOLO datos de negocio en SQLite (usuarios viven en Neon)
     tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
     total = 0
     with get_conn() as conn:
@@ -2259,9 +2279,7 @@ def _db_is_completely_empty() -> bool:
                 total += int(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0])
             except Exception:
                 pass
-
-    # Restaurar solo si NO hay datos y NO hay usuarios no-admin.
-    return (total == 0) and (non_admin == 0)
+    return total == 0
 
 def restore_from_gsheets_if_empty():
     if not GOOGLE_SHEETS_ENABLED or not GSPREADSHEET_ID:
@@ -2569,12 +2587,12 @@ def backup_user_snapshot(username: str):
     for nombre, df in tablas.items():
         _ws_write(_ws(sh, nombre), df)
 
-    with get_conn() as conn:
-        df_a = pd.read_sql_query(
-            "SELECT id, ts, action, table_name AS tabla, row_id FROM audit_log WHERE user=? ORDER BY id DESC LIMIT 200",
-            conn, params=(username,)
-        )
-    _ws_write(_ws(sh, "Estado", rows=200, cols=10), df_a)
+    # with get_conn() as conn:
+    #     df_a = pd.read_sql_query(
+    #         "SELECT id, ts, action, table_name AS tabla, row_id FROM audit_log WHERE user=? ORDER BY id DESC LIMIT 200",
+    #         conn, params=(username,)
+    #     )
+    #_ws_write(_ws(sh, "Estado", rows=200, cols=10), df_a)
 
     audit("user.backup.snapshot", extra={"user": username})
 
@@ -4274,16 +4292,13 @@ elif show("⚙️ Mi Cuenta"):
     if c3.button("💾 Copia de seguridad local (sqlite)", use_container_width=True):
         p = make_db_backup(); set_meta("LAST_BACKUP_ISO", datetime.now().isoformat(timespec="seconds"))
         finish_and_refresh(f"Backup creado: {p}")
-    if st.button("🚪 Cerrar sesión", use_container_width=True, key="btn_logout"):
-        _clear_session()
-        finish_and_refresh("Sesión cerrada 👋")  # esto ya limpia caches y hace rerun
 
     st.markdown("---")
     with st.form("SELF_pw_form2", clear_on_submit=True):
         newp = st.text_input("Nueva contraseña", type="password")
         ok = st.form_submit_button("Cambiar mi contraseña")
     if ok:
-        db_set_password(user, newp); notify_ok("Tu contraseña fue actualizada.")
+        AUTH.db_set_password(user, newp); notify_ok("Tu contraseña fue actualizada.")
     
     st.markdown("### Respaldo personal en Google Sheets")
     cA, cB = st.columns(2, gap="small")
@@ -4342,7 +4357,76 @@ if is_admin() and show("🛠️ Administración"):
     if c5.button("Cerrar sesión (admin)", use_container_width=True):
         _clear_session(); st.rerun()
 
+    if st.button("🔌 Probar conexión Neon / correr migraciones", use_container_width=True):
+        try:
+            AUTH.init_users_table()
+            AUTH.ensure_admin_seed()
+            st.session_state["AUTH_OFFLINE"] = False
+            st.success("OK: conectado a Neon y migraciones listas.")
+        except Exception as e:
+            st.session_state["AUTH_OFFLINE"] = True
+            st.error("No se pudo conectar a Neon.")
+            st.exception(e)
+
     st.divider()
+
+
+    # === Backup de usuarios (CSV) + Enviar a Google Sheets ===
+    with st.container():
+        st.subheader("📦 Respaldo de usuarios")
+
+        # 1) Trae usuarios desde Neon
+        try:
+            df_users = AUTH.db_list_users()
+        except Exception as e:
+            df_users = None
+            if _auth_db_available() and not st.session_state.get("AUTH_OFFLINE"):
+                try:
+                    df_users = AUTH.db_list_users()
+                except Exception as e:
+                    df_users = None
+                    st.info("No hay conexión a la BD; puedes descargar CSV vacío o probar luego.")
+                    st.exception(e)
+
+        c1, c2 = st.columns([1.2, 1], gap="small")
+
+        with c1:
+            st.caption("Descargar respaldo CSV")
+            if df_users is not None and not df_users.empty:
+                csv_buf = _df_to_csv_bytes(df_users)
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                st.download_button(
+                    "⬇️ Descargar users.csv",
+                    data=csv_buf,
+                    file_name=f"users_backup_{ts}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            else:
+                st.info("Aún no hay usuarios para exportar.")
+
+        with c2:
+            st.caption("Enviar a Google Sheets (hoja 'users')")
+            # ID de la hoja: prueba primero desde secrets y deja input manual
+            default_id = st.secrets.get("USERS_SHEET_ID", "")
+            sheet_id = st.text_input("Sheets ID", value=default_id, key="USERS_SHEET_ID_INPUT")
+
+            do_sync = st.button("📤 Enviar a Google Sheets", use_container_width=True)
+            if do_sync:
+                if not sheet_id:
+                    st.warning("Ingresa el ID de la hoja de cálculo.")
+                elif df_users is None or df_users.empty:
+                    st.warning("No hay datos para enviar.")
+                else:
+                    try:
+                        ok = _sync_users_to_google_sheets(df_users, sheet_id)
+                        if ok:
+                            st.success("Usuarios enviados a Google Sheets (worksheet 'users').")
+                        else:
+                            st.error("No se pudo enviar a Google Sheets (revisa credenciales/ID).")
+                    except Exception as e:
+                        st.error("Fallo al enviar a Google Sheets.")
+                        st.exception(e)
 
     # -------- Gestión de usuarios --------
     with st.expander("➕ Crear usuario", expanded=False):
@@ -4350,19 +4434,23 @@ if is_admin() and show("🛠️ Administración"):
         new_user = cu1.text_input("Usuario nuevo", key="USR_newname")
         new_pass = cu2.text_input("Contraseña", type="password", key="USR_newpass")
         new_role = cu3.selectbox("Rol", ["user", "admin"], key="USR_newrole")
+
         if st.button("Crear usuario", key="USR_create_btn"):
             if not new_user or not new_pass:
                 st.error("Usuario y contraseña son obligatorios.")
             else:
                 try:
-                    db_create_user(new_user, new_pass, new_role)
-                    notify_ok(f"Usuario '{new_user}' creado.")
-                    st.cache_data.clear()
+                    # 👇 escribe en Neon (wrappers apuntan a auth_db)
+                    AUTH.db_create_user(new_user, new_pass, new_role)
+                    st.success(f"Usuario '{new_user}' creado.")
+                    # 👇 invalida cualquier cache/listado previo y fuerza rerun
+                    st.session_state.pop("_users_debug_df", None)
+                    st.rerun()
                 except Exception as e:
                     st.error(f"No se pudo crear: {e}")
 
     with st.expander("🔑 Cambiar contraseña / rol", expanded=False):
-        dfu = db_list_users()
+        dfu = AUTH.db_list_users()
         if dfu.empty:
             st.info("No hay usuarios.")
         else:
@@ -4373,7 +4461,7 @@ if is_admin() and show("🛠️ Administración"):
                 if not new_pass2:
                     st.error("Escribe la nueva contraseña.")
                 else:
-                    db_set_password(sel_user, new_pass2)
+                    AUTH.db_set_password(sel_user, new_pass2)
                     notify_ok("Contraseña actualizada.")
 
             current_role = dfu.loc[dfu["username"]==sel_user,"role"].iloc[0]
@@ -4384,11 +4472,11 @@ if is_admin() and show("🛠️ Administración"):
                 if sel_user == user and new_role2 != "admin":
                     st.error("No puedes quitarte el rol admin a ti mismo.")
                 else:
-                    db_set_role(sel_user, new_role2)
+                    AUTH.db_set_role(sel_user, new_role2)
                     notify_ok("Rol actualizado.")
 
     with st.expander("🗂️ Lista de usuarios / eliminar", expanded=False):
-        dfu = db_list_users()
+        dfu = AUTH.db_list_users()
         if dfu.empty:
             st.info("No hay usuarios.")
         else:
@@ -4399,7 +4487,7 @@ if is_admin() and show("🛠️ Administración"):
                 if del_user == user:
                     st.error("No puedes eliminar tu propia cuenta.")
                 else:
-                    db_delete_user(del_user)
+                    AUTH.db_delete_user(del_user)
                     notify_ok(f"Usuario '{del_user}' eliminado.")
                     st.cache_data.clear()
 
@@ -4471,10 +4559,9 @@ if is_admin() and show("🛠️ Administración"):
     with st.expander("🧹 Arrancar de cero (borrar TODOS los datos)", expanded=False):
         st.warning(
             "Esto vacía todas las tablas de negocio (ventas, gastos, préstamos, inventario, deudores, "
-            "consolidado y auditoría). Puedes conservar los usuarios si quieres."
+            "consolidado y auditoría). **Los usuarios no se tocan** (viven en Neon)."
         )
 
-        keep_users = st.checkbox("Conservar usuarios (tabla users)", value=True)
         disable_gs = st.checkbox("Desactivar Google Sheets antes de borrar (evita auto-restauración)", value=True)
 
         conf = st.text_input("Escribe: BORRAR TODO", placeholder="BORRAR TODO")
@@ -4489,26 +4576,34 @@ if is_admin() and show("🛠️ Administración"):
                 # 2) Backup por si acaso
                 try:
                     make_db_backup()
-                except Exception as _e:
+                except Exception:
                     pass  # si falla el backup no bloqueamos el borrado
 
-                # 3) Vaciar tablas
+                # 3) Vaciar tablas (¡sin users!)
                 with get_conn() as conn:
                     tablas = [
                         "transacciones","gastos","prestamos","inventario",
                         "deudores_ini","consolidado_diario","audit_log"
                     ]
-                    if not keep_users:
-                        tablas.append("users")
                     for t in tablas:
                         conn.execute(f"DELETE FROM {t}")
                     conn.execute("DELETE FROM meta")  # limpia metadatos (incluye cortes/ajustes)
 
-                audit("db.wipe", extra={"keep_users": bool(keep_users)})
+                audit("db.wipe", extra={})
 
                 # 4) Limpia caché/estado y reinicia
                 st.session_state.clear()
                 finish_and_refresh("Base borrada. Empezamos de cero ✅")
             except Exception as e:
                 st.error(f"No pude vaciar los datos: {e}")
+
+if st.checkbox("👀 Ver usuarios en Neon (debug)", key="DBG_NEON"):
+    c = st.connection("auth_db", type="sql")
+    # ⬇️ ttl=0 evita caché; consulta directa a Neon
+    dfu = c.query("""
+        SELECT id, username, role, created_at
+        FROM public.users
+        ORDER BY id
+    """, ttl=0)
+    st.dataframe(dfu, use_container_width=True)
 # ---------------------------------------------------------
