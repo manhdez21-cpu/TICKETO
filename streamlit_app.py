@@ -13,6 +13,13 @@ import auth_db as AUTH
 from io import BytesIO
 from datetime import datetime
 
+# ✳️ PRIMERA y ÚNICA llamada de Streamlit:
+st.set_page_config(
+    page_title="Control de Gastos y Ventas",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
 import os
 os.environ.setdefault("BYPASS_BOOT", "1")      # salta ping a Neon → arranca offline
 os.environ.setdefault("DISABLE_COMPACT", "1")  # no fuerza ?compact=1&m=1 (evita loop)
@@ -38,10 +45,10 @@ def safe_boot():
         st.warning("Fallo inicializando la tabla de usuarios; inicio en modo offline.")
         st.exception(e)  # opcional
 
-if os.environ.get("BYPASS_BOOT", "0") == "1":
-    st.session_state["AUTH_OFFLINE"] = True   # fuerza modo offline (sin Neon)
+if os.environ.get("BYPASS_BOOT", "1") != "1":
+    safe_boot()
 else:
-    safe_boot()  # usa Neon cuando quieras quitar el bypass
+    st.session_state["AUTH_OFFLINE"] = True
 
 
 import sqlite3
@@ -51,12 +58,7 @@ from pathlib import Path
 import os
 import streamlit as st
 
-# ✳️ PRIMERA y ÚNICA llamada de Streamlit:
-st.set_page_config(
-    page_title="Control de Gastos y Ventas",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+
 
 # Flags de arranque (pueden ir aquí sin problema)
 os.environ.setdefault("BYPASS_BOOT", "1")
