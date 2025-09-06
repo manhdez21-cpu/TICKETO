@@ -14,6 +14,10 @@ from io import BytesIO
 from datetime import datetime
 
 import os
+os.environ.setdefault("BYPASS_BOOT", "1")      # salta ping a Neon → arranca offline
+os.environ.setdefault("DISABLE_COMPACT", "1")  # no fuerza ?compact=1&m=1 (evita loop)
+os.environ.setdefault("DEV_DEMO_USERS", "1")   # habilita usuarios DEMO para login
+os.environ.setdefault("GSHEETS_ENABLED", "0")  # no intenta Google Sheets de entrada
 
 def safe_boot():
     # 1) Prueba de vida muy rápida
@@ -34,7 +38,10 @@ def safe_boot():
         st.warning("Fallo inicializando la tabla de usuarios; inicio en modo offline.")
         st.exception(e)  # opcional
 
-safe_boot()
+if os.environ.get("BYPASS_BOOT", "0") == "1":
+    st.session_state["AUTH_OFFLINE"] = True   # fuerza modo offline (sin Neon)
+else:
+    safe_boot()  # usa Neon cuando quieras quitar el bypass
 
 
 import sqlite3
@@ -63,6 +70,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",   # ← antes estaba "collapsed"
 )
 
+st.write("🟢 Arrancando interfaz… (modo mínimo)")
+
 # --- Forzar compact por URL sin JS ni DOM hacks ---
 def _ensure_compact_query_params():
     # Usa API nueva si está disponible
@@ -90,7 +99,8 @@ def _ensure_compact_query_params():
     except Exception:
         st.session_state["_qp_once"] = True
 
-_ensure_compact_query_params()
+if os.environ.get("DISABLE_COMPACT", "0") != "1":
+    _ensure_compact_query_params()
 
 
 
@@ -395,9 +405,13 @@ import pandas as pd
 import numpy as np
 import re
 import gspread
-from google.oauth2.service_account import Credentials
 import os, json, hmac, base64, time
 import extra_streamlit_components as stx
+try:
+    import extra_streamlit_components as stx
+except Exception:
+    stx = None  # desactiva cookies persistentes si no está instalado
+    st.warning("extra-streamlit-components no está instalado; usando sesión básica.")
 import math
 
 
@@ -2179,7 +2193,7 @@ def _auth_db_available() -> bool:
 # =========================
 # Google Sheets Sync
 # =========================
-GOOGLE_SHEETS_ENABLED = bool(int(get_meta("GSHEETS_ENABLED", 1)))  # 1=on, 0=off
+GOOGLE_SHEETS_ENABLED = bool(int(get_meta("GSHEETS_ENABLED", 0)))  # 1=on, 0=off
 
 # 1) RUTA DEL JSON — puedes:
 #    a) poner el archivo "service_account.json" en la carpeta del proyecto, o
@@ -2213,6 +2227,8 @@ GSHEET_MAP = {
 @st.cache_resource(show_spinner=False)
 def _gs_client():
     # 1º: secrets como dict (Streamlit Cloud / .streamlit/secrets.toml)
+    import gspread
+    from google.oauth2.service_account import Credentials
     sa_info = None
     try:
         # si existe secrets["gcp_service_account"] (dict), úsalo
