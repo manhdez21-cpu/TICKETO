@@ -49,10 +49,16 @@ def safe_boot():
         st.warning("Fallo inicializando la tabla de usuarios; inicio en modo offline.")
         st.exception(e)  # opcional
 
-if os.environ.get("BYPASS_BOOT", "1") != "1":
-    safe_boot()
+BYPASS_BOOT = os.environ.get("BYPASS", "1") == "1"
+
+if not BYPASS_BOOT:
+    import auth_db as AUTH          # importar aquí
+    ok, msg = AUTH.safe_boot()
+    if not ok:
+        st.error(msg)
+        st.stop()
 else:
-    st.session_state["AUTH_OFFLINE"] = True
+    st.session_state["_offline_auth"] = True
 
 # --- SQLite: una sola ruta consistente bajo ./data ---
 DB_DIR = Path(__file__).parent / "data"
