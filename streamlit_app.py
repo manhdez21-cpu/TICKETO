@@ -50,26 +50,6 @@ if os.environ.get("BYPASS_BOOT", "1") != "1":
 else:
     st.session_state["AUTH_OFFLINE"] = True
 
-
-import sqlite3
-from contextlib import contextmanager
-from pathlib import Path
-
-import os
-import streamlit as st
-
-
-
-# Flags de arranque (pueden ir aquí sin problema)
-os.environ.setdefault("BYPASS_BOOT", "1")
-os.environ.setdefault("DISABLE_COMPACT", "1")
-
-# (Opcional) Smoke test: debe ir DESPUÉS de set_page_config
-if os.environ.get("SMOKETEST", "0") == "1":
-    st.write("✅ Cloud OK")
-    st.stop()
-
-
 DB_FILE = Path("finanzas.sqlite")
 
 @contextmanager
