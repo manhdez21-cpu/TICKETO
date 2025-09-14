@@ -727,22 +727,41 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 """
 
-def _col_exists(conn: sqlite3.Connection, table: str, col: str) -> bool:
-    cur = conn.execute(f"PRAGMA table_info({table})")
-    return any(r[1] == col for r in cur.fetchall())
+from sqlalchemy import text
+
+def _col_exists(conn, table: str, col: str) -> bool:
+    table = table.strip()
+    col = col.strip()
+    if DIALECT == "sqlite":
+        # PRAGMA va por exec_driver_sql en SQLAlchemy 2.x
+        rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+        # En PRAGMA table_info, la columna 2 (índice 1) es el nombre de la columna
+        return any(r[1] == col for r in rows)
+    else:
+        # Postgres: consulta en information_schema
+        q = text("""
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = :t
+              AND column_name = :c
+            LIMIT 1
+        """)
+        return conn.execute(q, {"t": table, "c": col}).first() is not None
 
 def migrate_add_owner_columns():
-    """
-    Asegura columna 'owner' en tablas clave y rellena lo existente como 'admin'.
-    Se puede ejecutar múltiples veces sin romper nada.
-    """
-    tables = ["transacciones", "gastos", "prestamos", "inventario", "deudores_ini", "consolidado_diario"]
+    tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
     with get_conn() as conn:
         for t in tables:
-            if not _col_exists(conn, t, "owner"):
-                conn.execute(f"ALTER TABLE {t} ADD COLUMN owner TEXT")
-                # Backfill: todo lo que ya estaba pasa a ser del admin
-                conn.execute(f"UPDATE {t} SET owner='admin' WHERE owner IS NULL OR owner=''")
+            if DIALECT == "postgres":
+                # Postgres permite IF NOT EXISTS
+                conn.execute(text(f'ALTER TABLE {t} ADD COLUMN IF NOT EXISTS owner TEXT'))
+            else:
+                # SQLite: sólo si no existe la columna
+                if not _col_exists(conn, t, "owner"):
+                    conn.execute(text(f'ALTER TABLE {t} ADD COLUMN owner TEXT'))
+        # Backfill simple (evita NULL/''), tabla por tabla
+        for t in tables:
+            conn.execute(text(f"UPDATE {t} SET owner='admin' WHERE owner IS NULL OR owner=''"))
 
 def audit(action: str,
         table_name: str | None = None,
