@@ -912,7 +912,7 @@ def migrate_to_per_user_data():
             # 1) Dueño de datos en tablas operativas
             for t in ["transacciones","gastos","prestamos","inventario","deudores_ini"]:
                 _add_col_if_missing(conn, t, "owner TEXT")
-                conn.execute(f"UPDATE {t} SET owner=COALESCE(NULLIF(owner,''),'admin') WHERE owner IS NULL OR owner=''")
+                conn.execute(text(f"UPDATE {t} SET owner=COALESCE(NULLIF(owner,''),'admin') WHERE owner IS NULL OR owner=''"))
                 conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)")
 
             # 2) consolidado_diario → vuelve único por (fecha, owner)
