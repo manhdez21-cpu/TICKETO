@@ -112,21 +112,35 @@ if not BYPASS_BOOT:
 else:
     st.session_state["_offline_auth"] = True
 
-# --- SQLite: una sola ruta consistente bajo ./data ---
-DB_DIR = Path(__file__).parent / "data"
-DB_DIR.mkdir(parents=True, exist_ok=True)
-DB_FILE = DB_DIR / "finanzas.sqlite"
+# === Conexión universal a BD (Postgres en prod, SQLite en local) ===
+import os
+from contextlib import contextmanager
+from pathlib import Path
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
+
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+if DATABASE_URL:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=5,
+        echo=False,
+    )
+    DIALECT = "postgres"
+else:
+    DB_DIR = Path(__file__).parent / "data"
+    DB_DIR.mkdir(parents=True, exist_ok=True)
+    DB_FILE = DB_DIR / "finanzas.sqlite"
+    engine = create_engine(f"sqlite:///{DB_FILE}", future=True)
+    DIALECT = "sqlite"
 
 @contextmanager
 def get_conn():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    try:
+    with engine.begin() as conn:
         yield conn
-        conn.commit()
-    finally:
-        conn.close()
-
 
 import streamlit as st
 import streamlit.components.v1 as components 
@@ -762,29 +776,102 @@ def audit(action: str,
         print("AUDIT ERROR:", e)
 
 def init_db():
-    with get_conn() as conn:
-        conn.executescript(SCHEMA)
+    schema = """
+    CREATE TABLE IF NOT EXISTS transacciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT,
+        cliente_nombre TEXT,
+        costo DOUBLE PRECISION DEFAULT 0,
+        venta DOUBLE PRECISION DEFAULT 0,
+        ganancia DOUBLE PRECISION DEFAULT 0,
+        debe_flag INTEGER DEFAULT 0,
+        paga TEXT,
+        abono1 DOUBLE PRECISION DEFAULT 0,
+        abono2 DOUBLE PRECISION DEFAULT 0,
+        observacion TEXT,
+        owner TEXT
+    );
 
+    CREATE TABLE IF NOT EXISTS consolidado_diario (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT,
+        efectivo DOUBLE PRECISION DEFAULT 0,
+        notas TEXT,
+        owner TEXT,
+        UNIQUE(fecha, owner)
+    );
+
+    CREATE TABLE IF NOT EXISTS gastos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT,
+        concepto TEXT,
+        valor DOUBLE PRECISION DEFAULT 0,
+        notas TEXT,
+        owner TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS prestamos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT,
+        valor DOUBLE PRECISION DEFAULT 0,
+        owner TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS inventario (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        producto TEXT,
+        valor_costo DOUBLE PRECISION DEFAULT 0,
+        owner TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS deudores_ini (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT,
+        valor DOUBLE PRECISION DEFAULT 0,
+        owner TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT,
+        user TEXT,
+        action TEXT,
+        table_name TEXT,
+        row_id INTEGER,
+        details TEXT
+    );
+    """
+    if DIALECT == "postgres":
+        # Ajustes de tipos/serial para Postgres
+        schema = schema.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY") \
+                       .replace("DOUBLE PRECISION", "DOUBLE PRECISION")
+
+    with get_conn() as c:
+        for stmt in [s.strip() for s in schema.split(";") if s.strip()]:
+            c.execute(text(stmt))
 
 def ensure_indexes():
-    with get_conn() as conn:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_trans_fecha   ON transacciones(fecha)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_trans_cliente ON transacciones(cliente_nombre)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_gastos_fecha  ON gastos(fecha)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts      ON audit_log(ts)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_log(action)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_table   ON audit_log(table_name)")
-        for t in ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]:
-            if _col_exists(conn, t, "owner"):
-                conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)")
-                if t == "transacciones":
-                    conn.execute("CREATE INDEX IF NOT EXISTS idx_trans_owner_id ON transacciones(owner, id)")
+    stmts = [
+        "CREATE INDEX IF NOT EXISTS idx_trans_fecha   ON transacciones(fecha)",
+        "CREATE INDEX IF NOT EXISTS idx_trans_cliente ON transacciones(cliente_nombre)",
+        "CREATE INDEX IF NOT EXISTS idx_gastos_fecha  ON gastos(fecha)",
+    ]
 
-        # 🔧 CLAVE: hace que ON CONFLICT(fecha, owner) funcione
-        conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ux_consolidado_fecha_owner "
-            "ON consolidado_diario(fecha, owner)"
-        )
+    # Índices por owner si la columna existe
+    for t in ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]:
+        stmts.append(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)")
+
+    # Único (fecha,owner) ya está en el CREATE, pero refuerza por si la tabla existía
+    stmts.append("CREATE UNIQUE INDEX IF NOT EXISTS ux_consolidado_fecha_owner ON consolidado_diario(fecha, owner)")
+
+    with get_conn() as c:
+        for s in stmts:
+            c.execute(text(s))
 
 init_db()
 migrate_add_owner_columns()
@@ -2466,6 +2553,8 @@ BACKUP_EVERY_HOURS = 8
 KEEP_BACKUPS = 40
 
 def make_db_backup() -> Path:
+    if DIALECT != "sqlite":
+        raise RuntimeError("Backups locales sólo aplican en modo SQLite.")
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     backup_path = BACKUP_DIR / f"finanzas_{ts}.sqlite"
