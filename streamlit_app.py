@@ -143,9 +143,10 @@ def get_conn():
         yield conn
 
 import streamlit as st
-import streamlit.components.v1 as components 
+import streamlit.components.v1 as components
 
-st.write("🟢 Arrancando interfaz… (modo mínimo)")
+if os.getenv("DEBUG_UI") == "1":
+    st.write("🟢 Arrancando interfaz… (modo mínimo)")
 
 # --- Forzar compact por URL sin JS ni DOM hacks ---
 def _ensure_compact_query_params():
@@ -4781,13 +4782,22 @@ if is_admin() and show("🛠️ Administración"):
             except Exception as e:
                 st.error(f"No pude vaciar los datos: {e}")
 
-if st.checkbox("👀 Ver usuarios en Neon (debug)", key="DBG_NEON"):
-    c = st.connection("auth_db", type="sql")
-    # ⬇️ ttl=0 evita caché; consulta directa a Neon
-    dfu = c.query("""
-        SELECT id, username, role, created_at
-        FROM public.users
-        ORDER BY id
-    """, ttl=0)
-    st.dataframe(dfu, use_container_width=True)
+# --- detectar admin de forma robusta ---
+u = st.session_state.get("user") or st.session_state.get("auth_user") or {}
+role = (u.get("role") or st.session_state.get("role") or "").strip().lower()
+
+# si tienes helper del módulo AUTH, úsalo:
+try:
+    is_admin = AUTH.is_admin(u)  # devuelve True/False
+except Exception:
+    is_admin = (role == "admin")
+
+# opcional: feature flag para ocultar en prod aunque seas admin
+SHOW_DEBUG_ADMIN = os.getenv("SHOW_DEBUG_ADMIN", "1") == "1"
+
+if is_admin and SHOW_DEBUG_ADMIN:
+    ver_neon = st.checkbox("👀 Ver usuarios en Neon (debug)")
+    if ver_neon:
+        # ... tu código para listar usuarios en Neon ...
+        pass
 # ---------------------------------------------------------
