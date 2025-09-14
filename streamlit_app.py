@@ -3703,7 +3703,7 @@ if show("🧮 Diario Consolidado"):
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ===== Total de capital (minimal) =====
-    total_capital = float(nuevo_total + efectivo_ini + total_prestamos + total_inventario)
+    total_capital = float(nuevo_total + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
     st.markdown(
         f'''
         <div class="mm-card">
