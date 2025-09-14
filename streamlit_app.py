@@ -12,6 +12,7 @@ import traceback
 import auth_db as AUTH
 from io import BytesIO
 from datetime import datetime
+from sqlalchemy import text
 
 import sqlite3
 from contextlib import contextmanager
@@ -727,8 +728,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 """
 
-from sqlalchemy import text
-
 def _col_exists(conn, table: str, col: str) -> bool:
     table = table.strip()
     col = col.strip()
@@ -788,8 +787,10 @@ def audit(action: str,
     try:
         with get_conn() as conn:
             conn.execute(
-                "INSERT INTO audit_log(user, action, table_name, row_id, details) VALUES (?, ?, ?, ?, ?)",
-                (u, action, table_name, row_id, json.dumps(payload, ensure_ascii=False, default=str))
+                text("INSERT INTO audit_log(user, action, table_name, row_id, details) "
+                    "VALUES (:u, :a, :t, :rid, :d)"),
+                {"u": u, "a": action, "t": table_name, "rid": row_id,
+                "d": json.dumps(payload, ensure_ascii=False, default=str)}
             )
     except Exception as e:
         # No romper la app por fallos de auditoría
@@ -904,43 +905,39 @@ def _table_cols(conn, table):
 def _add_col_if_missing(conn, table, col_def):
     name = col_def.split()[0]
     if name not in _table_cols(conn, table):
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_def}"))
 
 def migrate_to_per_user_data():
     try:
         with get_conn() as conn:
-            # 1) Dueño de datos en tablas operativas
             for t in ["transacciones","gastos","prestamos","inventario","deudores_ini"]:
                 _add_col_if_missing(conn, t, "owner TEXT")
-                conn.execute(text(f"UPDATE {t} SET owner=COALESCE(NULLIF(owner,''),'admin') WHERE owner IS NULL OR owner=''"))
-                conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)")
+                conn.execute(text(
+                    f"UPDATE {t} SET owner=COALESCE(NULLIF(owner,''),'admin') "
+                    f"WHERE owner IS NULL OR owner=''"
+                ))
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)"))
 
-            # 2) consolidado_diario → vuelve único por (fecha, owner)
             cols = _table_cols(conn, "consolidado_diario")
             if "owner" not in cols:
-                # crear nueva tabla con PK auto y UNIQUE(fecha,owner)
-                conn.execute("""
-                CREATE TABLE IF NOT EXISTS consolidado_diario_v2 (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                fecha TEXT,
-                efectivo REAL DEFAULT 0,
-                notas TEXT,
-                owner TEXT,
-                UNIQUE(fecha, owner)
-                )
-                """)
-                # mover datos viejos con owner='admin'
-                cur = conn.execute("SELECT fecha, efectivo, notas FROM consolidado_diario")
-                rows = cur.fetchall()
-                for fecha, efectivo, notas in rows:
-                    conn.execute("""
-                    INSERT OR IGNORE INTO consolidado_diario_v2 (fecha, efectivo, notas, owner)
-                    VALUES (?, ?, ?, 'admin')
-                    """, (fecha, efectivo, notas))
-                # reemplazar tabla
-                conn.execute("DROP TABLE consolidado_diario")
-                conn.execute("ALTER TABLE consolidado_diario_v2 RENAME TO consolidado_diario")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_consolidado_owner ON consolidado_diario(owner)")
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS consolidado_diario_v2 (
+                      id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      fecha TEXT, efectivo REAL DEFAULT 0, notas TEXT, owner TEXT,
+                      UNIQUE(fecha, owner)
+                    )
+                """))
+                cur = conn.execute(text("SELECT fecha, efectivo, notas FROM consolidado_diario"))
+                for fecha, efectivo, notas in cur.fetchall():
+                    conn.execute(
+                        text("""INSERT OR IGNORE INTO consolidado_diario_v2
+                                (fecha, efectivo, notas, owner)
+                                VALUES (:f, :e, :n, 'admin')"""),
+                        {"f": fecha, "e": efectivo, "n": notas}
+                    )
+                conn.execute(text("DROP TABLE consolidado_diario"))
+                conn.execute(text("ALTER TABLE consolidado_diario_v2 RENAME TO consolidado_diario"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_consolidado_owner ON consolidado_diario(owner)"))
     except Exception as e:
         st.warning(f"⚠️ Migración per-user falló: {e}")
 
@@ -1077,18 +1074,18 @@ def set_meta(key: str, value: str):
     old_value = None
     try:
         with get_conn() as conn:
-            row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+            row = conn.execute(text("SELECT value FROM meta WHERE key=:key"), {"key": key}).fetchone()
             old_value = row[0] if row else None
     except Exception:
         pass
 
     with get_conn() as conn:
         conn.execute(
-            """
-            INSERT INTO meta(key,value) VALUES(?,?)
-            ON CONFLICT(key) DO UPDATE SET value=excluded.value
-            """,
-            (key, str(value))
+            text("""
+                INSERT INTO meta(key,value) VALUES(:key,:value)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """),
+            {"key": key, "value": str(value)}
         )
 
     audit("meta.set", table_name="meta",
@@ -1540,11 +1537,11 @@ def _to_int(v) -> int:
 def delete_consolidado(fecha_str: str):
     owner = _current_owner()
     with get_conn() as conn:
-        cur = conn.execute("SELECT * FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner))
+        cur = conn.execute(text("SELECT * FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner)))
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
-        conn.execute("DELETE FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner))
+        conn.execute(text("DELETE FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner)))
     audit("delete", table_name="consolidado_diario", extra={"fecha": fecha_str, "owner": owner}, before=before)
 
 def upsert_consolidado(fecha_str: str, efectivo: float, notas: str=""):
@@ -1557,13 +1554,15 @@ def upsert_consolidado(fecha_str: str, efectivo: float, notas: str=""):
         before = dict(zip(cols, row)) if row else None
 
     with get_conn() as conn:
-        conn.execute("""
-            INSERT INTO consolidado_diario(fecha,efectivo,notas,owner)
-            VALUES(?,?,?,?)
-            ON CONFLICT(fecha, owner) DO UPDATE SET
-                efectivo=excluded.efectivo,
-                notas=excluded.notas
-        """, (fecha_str, _to_float(efectivo), str(notas or '').strip(), owner))
+        conn.execute(
+            text("""
+                INSERT INTO consolidado_diario(fecha,efectivo,notas,owner)
+                VALUES(:f,:e,:n,:o)
+                ON CONFLICT(fecha, owner) DO UPDATE SET
+                efectivo=excluded.efectivo, notas=excluded.notas
+            """),
+            {"f": fecha_str, "e": _to_float(efectivo), "n": str(notas or '').strip(), "o": owner}
+        )
     audit("upsert", table_name="consolidado_diario",
         extra={"fecha": fecha_str, "owner": owner},
         before=before,
@@ -1573,8 +1572,9 @@ def get_efectivo_global_now() -> tuple[float, str]:
     owner = _current_owner()
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT efectivo, notas FROM consolidado_diario WHERE UPPER(TRIM(fecha))='GLOBAL' AND owner=?",
-            (owner,)
+            text("SELECT efectivo, notas FROM consolidado_diario "
+                "WHERE UPPER(TRIM(fecha))='GLOBAL' AND owner=:o"),
+            {"o": owner}
         ).fetchone()
     if row:
         return float(row[0] or 0.0), str(row[1] or "")
@@ -1596,7 +1596,7 @@ def insert_venta(r: dict, owner_override: str | None = None) -> int:
     }
     with get_conn() as conn:
         cur = conn.execute(
-            """
+            text("""
             INSERT INTO transacciones
             (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion, owner)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1604,7 +1604,7 @@ def insert_venta(r: dict, owner_override: str | None = None) -> int:
             (payload['fecha'], payload['cliente_nombre'], payload['costo'], payload['venta'],
             payload['ganancia'], payload['debe_flag'], payload['paga'], payload['abono1'],
             payload['abono2'], payload['observacion'], payload['owner'])
-        )
+        ))
         row_id = cur.lastrowid
     audit("insert", table_name="transacciones", row_id=row_id, after=payload)
     return row_id
@@ -1619,9 +1619,9 @@ def insert_gasto(r: dict, owner_override: str | None = None) -> int:
     }
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO gastos (fecha, concepto, valor, notas, owner) VALUES (?, ?, ?, ?, ?)",
+            text("INSERT INTO gastos (fecha, concepto, valor, notas, owner) VALUES (?, ?, ?, ?, ?)",
             (payload['fecha'], payload['concepto'], payload['valor'], payload['notas'], payload['owner'])
-        )
+        ))
         row_id = cur.lastrowid
     audit("insert", table_name="gastos", row_id=row_id, after=payload)
     return row_id
@@ -1634,9 +1634,9 @@ def insert_prestamo(r: dict, owner_override: str | None = None) -> int:
     }
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO prestamos (nombre, valor, owner) VALUES (?, ?, ?)",
+            text("INSERT INTO prestamos (nombre, valor, owner) VALUES (?, ?, ?)",
             (payload['nombre'], payload['valor'], payload['owner'])
-        )
+        ))
         row_id = cur.lastrowid
     audit("insert", table_name="prestamos", row_id=row_id, after=payload)
     return row_id
@@ -1649,9 +1649,9 @@ def insert_inventario(r: dict, owner_override: str | None = None) -> int:
     }
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO inventario (producto, valor_costo, owner) VALUES (?, ?, ?)",
+            text("INSERT INTO inventario (producto, valor_costo, owner) VALUES (?, ?, ?)",
             (payload['producto'], payload['valor_costo'], payload['owner'])
-        )
+        ))
         row_id = cur.lastrowid
     audit("insert", table_name="inventario", row_id=row_id, after=payload)
     return row_id
