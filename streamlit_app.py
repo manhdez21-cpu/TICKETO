@@ -898,7 +898,7 @@ migrate_add_owner_columns()
 ensure_indexes()
 
 def _table_cols(conn, table):
-    cur = conn.execute(f"PRAGMA table_info({table})")
+    cur = conn.exec_driver_sql(f"PRAGMA table_info({tabla})")
     return {row[1] for row in cur.fetchall()}
 
 def _add_col_if_missing(conn, table, col_def):
@@ -1095,15 +1095,16 @@ def set_meta(key: str, value: str):
         before={"key": key, "value": old_value},
         after={"key": key, "value": value})
 
-def get_meta(key: str, default: float|str|None=None):
+def set_meta(key: str, value: str):
     with get_conn() as conn:
-        row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
-    if row and row[0] is not None:
-        try:
-            return float(row[0])
-        except Exception:
-            return row[0]
-    return default
+        conn.execute(
+            text("""
+                INSERT INTO meta(key, value)
+                VALUES (:key, :value)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """),
+            {"key": key, "value": value}
+        )
 
 def set_corte_deudores(d: date):
     set_meta("CORTE_DEUDORES", d.isoformat())
