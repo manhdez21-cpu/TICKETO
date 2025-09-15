@@ -1549,29 +1549,42 @@ def delete_consolidado(fecha_str: str):
     audit("delete", table_name="consolidado_diario",
           extra={"fecha": fecha_str, "owner": owner}, before=before)
 
-def upsert_consolidado(fecha_str: str, efectivo: float, notas: str=""):
+def upsert_consolidado(fecha_str: str, efectivo, notas: str = ""):
     owner = _current_owner()
-    before = None
-    with get_conn() as conn:
-        cur = conn.execute("SELECT * FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner))
-        row = cur.fetchone()
-        cols = [d[0] for d in cur.description] if cur.description else []
-        before = dict(zip(cols, row)) if row else None
+    # normaliza el efectivo por si viene "3.000.000" o "3,000,000"
+    ef = _to_float(efectivo)
+    no = str(notas or "").strip()
 
     with get_conn() as conn:
-        conn.execute(
-            text("""
-                INSERT INTO consolidado_diario(fecha,efectivo,notas,owner)
-                VALUES(:f,:e,:n,:o)
-                ON CONFLICT(fecha, owner) DO UPDATE SET
-                efectivo=excluded.efectivo, notas=excluded.notas
-            """),
-            {"f": fecha_str, "e": _to_float(efectivo), "n": str(notas or '').strip(), "o": owner}
-        )
-    audit("upsert", table_name="consolidado_diario",
-        extra={"fecha": fecha_str, "owner": owner},
-        before=before,
-        after={"fecha": fecha_str, "efectivo": float(efectivo), "notas": str(notas or '').strip(), "owner": owner})
+        # 1) ¿ya existe la fila?
+        row = conn.execute(
+            text("SELECT id FROM consolidado_diario WHERE fecha = :f AND owner = :o"),
+            {"f": fecha_str, "o": owner}
+        ).fetchone()
+
+        if row:
+            # 2) UPDATE
+            conn.execute(
+                text("UPDATE consolidado_diario SET efectivo = :e, notas = :n WHERE fecha = :f AND owner = :o"),
+                {"e": ef, "n": no, "f": fecha_str, "o": owner}
+            )
+            rid = row[0]
+            audit("update", table_name="consolidado_diario", row_id=rid,
+                  after={"fecha": fecha_str, "efectivo": ef, "notas": no, "owner": owner})
+        else:
+            # 3) INSERT con upsert idempotente si tu dialecto lo soporta
+            conn.execute(
+                text("""
+                    INSERT INTO consolidado_diario (fecha, efectivo, notas, owner)
+                    VALUES (:f, :e, :n, :o)
+                    ON CONFLICT (fecha, owner) DO UPDATE SET
+                        efectivo = EXCLUDED.efectivo,
+                        notas = EXCLUDED.notas
+                """),
+                {"f": fecha_str, "e": ef, "n": no, "o": owner}
+            )
+            audit("insert", table_name="consolidado_diario", row_id=None,
+                  after={"fecha": fecha_str, "efectivo": ef, "notas": no, "owner": owner})
 
 def get_efectivo_global_now() -> tuple[float, str]:
     owner = _current_owner()
