@@ -138,6 +138,12 @@ else:
     engine = create_engine(f"sqlite:///{DB_FILE}", future=True)
     DIALECT = "sqlite"
 
+IS_CLOUD = os.getenv("STREAMLIT_RUNTIME", "") != ""
+if IS_CLOUD and DIALECT != "postgres":
+    st.error("🚨 Producción sin DATABASE_URL: datos se perderán al reiniciar. "
+             "Configura DATABASE_URL (Neon) en Settings → Secrets.")
+    st.stop()
+
 @contextmanager
 def get_conn():
     with engine.begin() as conn:
@@ -145,6 +151,21 @@ def get_conn():
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+def _update_row(table: str, row_id: int, payload: dict):
+    """UPDATE genérico para cualquier tabla, compatible con SQLite/Postgres."""
+    # 1) construye el SET con parámetros nombrados
+    sets = ", ".join([f"{k} = :{k}" for k in payload.keys()])
+    # 2) where con dueño si no está activado 'ver todo'
+    view_all = _view_all_enabled()
+    where = "id = :id" + ("" if view_all else " AND owner = :owner")
+    # 3) parámetros
+    params = {**payload, "id": int(row_id)}
+    if not view_all:
+        params["owner"] = _current_owner()
+    # 4) ejecuta
+    with get_conn() as conn:
+        conn.execute(text(f"UPDATE {table} SET {sets} WHERE {where}"), params)
 
 if os.getenv("DEBUG_UI") == "1":
     st.write("🟢 Arrancando interfaz… (modo mínimo)")
@@ -1111,10 +1132,10 @@ ADJ_VENTAS_EFECTIVO = 0.0
 # =========================================================
 @st.cache_data(show_spinner=False)
 def _read_ventas(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    q = "SELECT * FROM transacciones" + ("" if view_all else " WHERE owner=?")
-    params = () if view_all else (owner,)
+    sql = text("SELECT * FROM transacciones" + ("" if view_all else " WHERE owner = :owner"))
+    params = None if view_all else {"owner": owner}
     with get_conn() as conn:
-        df = pd.read_sql_query(q, conn, params=params)
+        df = pd.read_sql_query(sql, conn, params=params)
     if df.empty:
         cols = ['id','fecha','cliente_nombre','costo','venta','ganancia','debe_flag','paga','abono1','abono2','observacion','owner']
         return pd.DataFrame(columns=cols)
@@ -1129,15 +1150,15 @@ def _read_ventas(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFr
     return df
 
 def read_ventas() -> pd.DataFrame:
-    return _read_ventas(_db_sig(), _current_owner(), _view_all_enabled())
+    return _read_ventas(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
 def _read_gastos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    q = "SELECT * FROM gastos" + ("" if view_all else " WHERE owner=?")
-    params = () if view_all else (owner,)
+    stmt = text("SELECT * FROM gastos" + ("" if view_all else " WHERE owner = :owner"))
+    params = None if view_all else {"owner": owner}
     with get_conn() as conn:
-        df = pd.read_sql_query(q, conn, params=params)
+        df = pd.read_sql_query(stmt, conn, params=params)
     if df.empty:
         return pd.DataFrame(columns=['id','fecha','concepto','valor','notas','owner'])
     df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce', dayfirst=True).dt.date
@@ -1145,45 +1166,45 @@ def _read_gastos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFr
     return df
 
 def read_gastos() -> pd.DataFrame:
-    return _read_gastos(_db_sig(), _current_owner(), _view_all_enabled())
+    return _read_gastos(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
 def _read_prestamos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    q = "SELECT * FROM prestamos" + ("" if view_all else " WHERE owner=?")
-    params = () if view_all else (owner,)
+    stmt = text("SELECT * FROM prestamos" + ("" if view_all else " WHERE owner = :owner"))
+    params = None if view_all else {"owner": owner}
     with get_conn() as conn:
-        df = pd.read_sql_query(q, conn, params=params)
+        df = pd.read_sql_query(stmt, conn, params=params)
     if df.empty:
         return pd.DataFrame(columns=['id','nombre','valor','owner'])
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
     return df
 
 def read_prestamos() -> pd.DataFrame:
-    return _read_prestamos(_db_sig(), _current_owner(), _view_all_enabled())
+    return _read_prestamos(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
 def _read_inventario(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    q = "SELECT * FROM inventario" + ("" if view_all else " WHERE owner=?")
-    params = () if view_all else (owner,)
+    stmt = text("SELECT * FROM inventario" + ("" if view_all else " WHERE owner = :owner"))
+    params = None if view_all else {"owner": owner}
     with get_conn() as conn:
-        df = pd.read_sql_query(q, conn, params=params)
+        df = pd.read_sql_query(stmt, conn, params=params)
     if df.empty:
         return pd.DataFrame(columns=['id','producto','valor_costo','owner'])
     df['valor_costo'] = pd.to_numeric(df['valor_costo'], errors='coerce').fillna(0.0)
     return df
 
 def read_inventario() -> pd.DataFrame:
-    return _read_inventario(_db_sig(), _current_owner(), _view_all_enabled())
+    return _read_inventario(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
 def _read_consolidado(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    q = "SELECT * FROM consolidado_diario" + ("" if view_all else " WHERE owner=?")
-    params = () if view_all else (owner,)
+    stmt = text("SELECT * FROM consolidado_diario" + ("" if view_all else " WHERE owner = :owner"))
+    params = None if view_all else {"owner": owner}
     with get_conn() as conn:
-        df = pd.read_sql_query(q, conn, params=params)
+        df = pd.read_sql_query(stmt, conn, params=params)
     if df.empty:
         return pd.DataFrame(columns=['fecha','efectivo','notas','owner'])
     df['fecha_raw'] = df['fecha'].astype(str)
@@ -1192,15 +1213,15 @@ def _read_consolidado(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.D
     return df
 
 def read_consolidado() -> pd.DataFrame:
-    return _read_consolidado(_db_sig(), _current_owner(), _view_all_enabled())
+    return _read_consolidado(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
 
 @st.cache_data(show_spinner=False)
 def _read_deudores_ini(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    q = "SELECT * FROM deudores_ini" + ("" if view_all else " WHERE owner=?")
-    params = () if view_all else (owner,)
+    stmt = text("SELECT * FROM deudores_ini" + ("" if view_all else " WHERE owner = :owner"))
+    params = None if view_all else {"owner": owner}
     with get_conn() as conn:
-        df = pd.read_sql_query(q, conn, params=params)
+        df = pd.read_sql_query(stmt, conn, params=params)
     if df.empty:
         return pd.DataFrame(columns=['id','nombre','valor','owner'])
     df['nombre'] = df['nombre'].astype(str).str.strip()
@@ -1208,7 +1229,7 @@ def _read_deudores_ini(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.
     return df[['id','nombre','valor','owner']]
 
 def read_deudores_ini() -> pd.DataFrame:
-    return _read_deudores_ini(_db_sig(), _current_owner(), _view_all_enabled())
+    return _read_deudores_ini(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
 # ========= Corte y unificación de deudores =========
 def get_corte_deudores() -> date:
@@ -1694,11 +1715,11 @@ def _fetch_row_as_dict(conn: sqlite3.Connection, table: str, row_id: int) -> dic
     return dict(zip(cols, r))
 
 def delete_venta_id(row_id: int):
-    where = "id=?"
-    params = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params.append(_current_owner())
+    view_all = _view_all_enabled()
+    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    params = {"id": int(row_id)}
+    if not _view_all_enabled(): params["owner"] = _current_owner()
+    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
 
     with get_conn() as conn:
         cur = conn.execute(f"SELECT * FROM transacciones WHERE {where}", tuple(params))
@@ -1712,11 +1733,11 @@ def delete_venta_id(row_id: int):
 
 
 def delete_gasto_id(row_id: int):
-    where = "id=?"
-    params = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params.append(_current_owner())
+    view_all = _view_all_enabled()
+    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    params = {"id": int(row_id)}
+    if not _view_all_enabled(): params["owner"] = _current_owner()
+    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
 
     with get_conn() as conn:
         cur = conn.execute(f"SELECT * FROM gastos WHERE {where}", tuple(params))
@@ -1730,11 +1751,11 @@ def delete_gasto_id(row_id: int):
 
 
 def delete_prestamo_id(row_id: int):
-    where = "id=?"
-    params = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params.append(_current_owner())
+    view_all = _view_all_enabled()
+    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    params = {"id": int(row_id)}
+    if not _view_all_enabled(): params["owner"] = _current_owner()
+    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
 
     with get_conn() as conn:
         cur = conn.execute(f"SELECT * FROM prestamos WHERE {where}", tuple(params))
@@ -1748,11 +1769,11 @@ def delete_prestamo_id(row_id: int):
 
 
 def delete_inventario_id(row_id: int):
-    where = "id=?"
-    params = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params.append(_current_owner())
+    view_all = _view_all_enabled()
+    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    params = {"id": int(row_id)}
+    if not _view_all_enabled(): params["owner"] = _current_owner()
+    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
 
     with get_conn() as conn:
         cur = conn.execute(f"SELECT * FROM inventario WHERE {where}", tuple(params))
@@ -1764,168 +1785,53 @@ def delete_inventario_id(row_id: int):
 
     audit("delete", table_name="inventario", row_id=int(row_id), before=before)
 
-def update_venta_fields(row_id: int, **changes) -> bool:
-    allowed = {"fecha","cliente_nombre","costo","venta","ganancia","debe_flag","paga","abono1","abono2","observacion"}
-    if not changes:
-        return False
+def update_venta_fields(row_id: int, payload: dict):
+    # Normaliza numéricos si llegan como "3.000,00"
+    if "venta" in payload:    payload["venta"]    = _to_float(payload["venta"])
+    if "costo" in payload:    payload["costo"]    = _to_float(payload["costo"])
+    if "ganancia" in payload: payload["ganancia"] = _to_float(payload["ganancia"])
+    if "abono1" in payload:   payload["abono1"]   = _to_float(payload["abono1"])
+    if "abono2" in payload:   payload["abono2"]   = _to_float(payload["abono2"])
+    if "debe_flag" in payload: payload["debe_flag"] = _to_int(payload["debe_flag"])
 
-    payload = {}
-    for k, v in changes.items():
-        if k not in allowed:
-            continue
-        if k in {"costo","venta","ganancia","abono1","abono2"}: payload[k] = _to_float(v)
-        elif k == "debe_flag": payload[k] = _to_int(v)
-        elif k == "fecha": payload[k] = _to_date_str(v)
-        else: payload[k] = str(v or "").strip()
-    if not payload:
-        return False
-
-    where = "id=?"
-    params_where = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params_where.append(_current_owner())
-
-    with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM transacciones WHERE {where}", tuple(params_where))
-        before_row = cur.fetchone()
-        if not before_row:
-            audit("update.denied", table_name="transacciones", row_id=int(row_id),
-                extra={"reason":"row not found or not owned", "owner":_current_owner()})
-            return False
-
-        cols = [d[0] for d in cur.description]
-        before = dict(zip(cols, before_row))
-
-        sets = ", ".join([f"{k}=?" for k in payload.keys()])
-        vals = list(payload.values()) + params_where
-        conn.execute(f"UPDATE transacciones SET {sets} WHERE {where}", vals)
-
-        after = before.copy(); after.update(payload)
-
-    audit("update", table_name="transacciones", row_id=int(row_id), before=before, after=after)
-    return True
+    _update_row("transacciones", row_id, payload)
+    audit("update", table_name="transacciones", row_id=row_id, after=payload)
 
 
-def update_gasto_fields(row_id: int, **changes) -> bool:
-    allowed = {"fecha","concepto","valor","notas"}
-    if not changes:
-        return False
+def update_gasto_fields(row_id: int, payload: dict):
+    if "valor" in payload:
+        payload["valor"] = _to_float(payload["valor"])
 
-    payload = {}
-    for k, v in changes.items():
-        if k not in allowed: continue
-        if k == "valor": payload[k] = _to_float(v)
-        elif k == "fecha": payload[k] = _to_date_str(v)
-        else: payload[k] = str(v or "").strip()
-    if not payload:
-        return False
-
-    where = "id=?"
-    params_where = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params_where.append(_current_owner())
-
-    with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM gastos WHERE {where}", tuple(params_where))
-        before_row = cur.fetchone()
-        if not before_row:
-            audit("update.denied", table_name="gastos", row_id=int(row_id),
-                extra={"reason":"row not found or not owned", "owner":_current_owner()})
-            return False
-
-        cols = [d[0] for d in cur.description]
-        before = dict(zip(cols, before_row))
-
-        sets = ", ".join([f"{k}=?" for k in payload.keys()])
-        vals = list(payload.values()) + params_where
-        conn.execute(f"UPDATE gastos SET {sets} WHERE {where}", vals)
-
-        after = before.copy(); after.update(payload)
-
-    audit("update", table_name="gastos", row_id=int(row_id), before=before, after=after)
-    return True
+    _update_row("gastos", row_id, payload)
+    audit("update", table_name="gastos", row_id=row_id, after=payload)
 
 
-def update_prestamo_fields(row_id: int, **changes) -> bool:
-    allowed = {"nombre","valor"}
-    if not changes:
-        return False
+def update_prestamo_fields(row_id: int, payload: dict):
+    if "valor" in payload:
+        payload["valor"] = _to_float(payload["valor"])
 
-    payload = {}
-    for k, v in changes.items():
-        if k not in allowed: continue
-        if k == "valor": payload[k] = _to_float(v)
-        else: payload[k] = str(v or "").strip()
-    if not payload:
-        return False
-
-    where = "id=?"
-    params_where = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params_where.append(_current_owner())
-
-    with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM prestamos WHERE {where}", tuple(params_where))
-        before_row = cur.fetchone()
-        if not before_row:
-            audit("update.denied", table_name="prestamos", row_id=int(row_id),
-                extra={"reason":"row not found or not owned", "owner":_current_owner()})
-            return False
-
-        cols = [d[0] for d in cur.description]
-        before = dict(zip(cols, before_row))
-
-        sets = ", ".join([f"{k}=?" for k in payload.keys()])
-        vals = list(payload.values()) + params_where
-        conn.execute(f"UPDATE prestamos SET {sets} WHERE {where}", vals)
-
-        after = before.copy(); after.update(payload)
-
-    audit("update", table_name="prestamos", row_id=int(row_id), before=before, after=after)
-    return True
+    _update_row("prestamos", row_id, payload)
+    audit("update", table_name="prestamos", row_id=row_id, after=payload)
 
 
-def update_inventario_fields(row_id: int, **changes) -> bool:
-    allowed = {"producto","valor_costo"}
-    if not changes:
-        return False
 
-    payload = {}
-    for k, v in changes.items():
-        if k not in allowed: continue
-        if k == "valor_costo": payload[k] = _to_float(v)
-        else: payload[k] = str(v or "").strip()
-    if not payload:
-        return False
+def update_inventario_fields(row_id: int, payload: dict):
+    if "valor_costo" in payload:
+        payload["valor_costo"] = _to_float(payload["valor_costo"])
 
-    where = "id=?"
-    params_where = [int(row_id)]
-    if not _view_all_enabled():
-        where += " AND owner=?"
-        params_where.append(_current_owner())
+    _update_row("inventario", row_id, payload)
+    audit("update", table_name="inventario", row_id=row_id, after=payload)
 
-    with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM inventario WHERE {where}", tuple(params_where))
-        before_row = cur.fetchone()
-        if not before_row:
-            audit("update.denied", table_name="inventario", row_id=int(row_id),
-                extra={"reason":"row not found or not owned", "owner":_current_owner()})
-            return False
 
-        cols = [d[0] for d in cur.description]
-        before = dict(zip(cols, before_row))
+def _db_sig_runtime() -> tuple[int, int, int, int, int]:
+    with get_conn() as c:
+        a = c.execute(text("SELECT COALESCE(MAX(id),0) FROM transacciones")).scalar() or 0
+        b = c.execute(text("SELECT COALESCE(MAX(id),0) FROM gastos")).scalar() or 0
+        c1 = c.execute(text("SELECT COALESCE(MAX(id),0) FROM prestamos")).scalar() or 0
+        d = c.execute(text("SELECT COALESCE(MAX(id),0) FROM inventario")).scalar() or 0
+        e = c.execute(text("SELECT COALESCE(COUNT(*),0) FROM consolidado_diario")).scalar() or 0
+    return (int(a), int(b), int(c1), int(d), int(e))
 
-        sets = ", ".join([f"{k}=?" for k in payload.keys()])
-        vals = list(payload.values()) + params_where
-        conn.execute(f"UPDATE inventario SET {sets} WHERE {where}", vals)
-
-        after = before.copy(); after.update(payload)
-
-    audit("update", table_name="inventario", row_id=int(row_id), before=before, after=after)
-    return True
 
 # =========================================================
 # Helpers UI
