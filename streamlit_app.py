@@ -1641,20 +1641,32 @@ def insert_prestamo(r: dict, owner_override: str | None = None) -> int:
     audit("insert", table_name="prestamos", row_id=row_id, after=payload)
     return row_id
 
-def insert_inventario(r: dict, owner_override: str | None = None) -> int:
+def insert_inventario(data: dict):
+    # Owner por defecto desde la sesión (ajusta si usas otra clave)
+    u = st.session_state.get("user") or st.session_state.get("auth_user") or {}
+    owner = (u.get("username") or u.get("user") or st.session_state.get("owner") or "admin")
+
     payload = {
-        'producto': str(r.get('producto') or '').strip(),
-        'valor_costo': _to_float(r.get('valor_costo')),
-        'owner': (owner_override.strip() if owner_override else _row_owner()),
+        "producto": str(data.get("producto", "")).strip(),
+        "valor_costo": float(data.get("valor_costo") or 0),
+        "owner": owner
     }
+
+    if DIALECT == "postgres":
+        sql = text("""
+            INSERT INTO inventario (producto, valor_costo, owner)
+            VALUES (:producto, :valor_costo, :owner)
+            RETURNING id
+        """)
+    else:
+        sql = text("""
+            INSERT INTO inventario (producto, valor_costo, owner)
+            VALUES (:producto, :valor_costo, :owner)
+        """)
+
     with get_conn() as conn:
-        cur = conn.execute(
-            text("INSERT INTO inventario (producto, valor_costo, owner) VALUES (?, ?, ?)",
-            (payload['producto'], payload['valor_costo'], payload['owner'])
-        ))
-        row_id = cur.lastrowid
-    audit("insert", table_name="inventario", row_id=row_id, after=payload)
-    return row_id
+        cur = conn.execute(sql, payload)
+        return (cur.scalar() if DIALECT == "postgres" else cur.lastrowid)
 
 def insert_deudor_ini(r: dict, owner_override: str | None = None) -> int:
     payload = {
@@ -4368,7 +4380,7 @@ elif show("📦 Inventario"):
         elif float(INV_costo) <= 0:
             st.warning("El valor costo debe ser mayor que 0.")
         else:
-            insert_inventario({'producto': INV_prod, 'valor_costo': float(INV_costo)})
+            insert_inventario({'producto': INV_prod, 'valor_costo': float(INV_costo), 'owner': None})
             clear_inventario_form()
             finish_and_refresh("Ítem guardado", ["inventario"])
 
