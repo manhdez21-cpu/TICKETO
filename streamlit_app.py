@@ -227,25 +227,18 @@ def _ensure_compact_query_params():
     try:
         qp = st.query_params
         changed = False
-        if qp.get("compact") != "2":   # ← antes "1"
+        if qp.get("compact") != "2":
             qp["compact"] = "2"; changed = True
         if qp.get("m") != "1":
             qp["m"] = "1"; changed = True
         if changed and not st.session_state.get("_qp_once"):
             st.session_state["_qp_once"] = True
-            st.rerun()
+            st.experimental_set_query_params(**qp)  # escribe URL
+            st.stop()  # ← evita el doble rerun
         else:
             st.session_state["_qp_once"] = True
-        return
     except Exception:
         pass
-    try:
-        if not st.session_state.get("_qp_once"):
-            st.experimental_set_query_params(compact="2", m="1")  # ← antes "1"
-            st.session_state["_qp_once"] = True
-            st.rerun()
-    except Exception:
-        st.session_state["_qp_once"] = True
 
 # if os.environ.get("DISABLE_COMPACT", "1") != "1":
 #     _ensure_compact_query_params()
@@ -2613,8 +2606,13 @@ def _truncate_tables(tables: list[str]):
     # Seguridad: la tabla de usuarios jamás se toca aquí.
     assert "users" not in tables, "Seguridad: no se puede truncar la tabla 'users'."
     with get_conn() as conn:
-        for t in tables:
-            conn.execute(f"DELETE FROM {t}")
+        if DIALECT == "postgres":
+            # Neon/Postgres: rápido y reinicia autoincrementos
+            conn.execute(text(f"TRUNCATE TABLE {', '.join(tables)} RESTART IDENTITY CASCADE"))
+        else:
+            # SQLite fallback
+            for t in tables:
+                conn.execute(text(f"DELETE FROM {t}"))
 
 def _insert_many(table: str, df: pd.DataFrame) -> int:
     n = 0
