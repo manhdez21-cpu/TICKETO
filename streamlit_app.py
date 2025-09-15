@@ -18,6 +18,8 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+
+
 # ✳️ PRIMERA y ÚNICA llamada de Streamlit:
 st.set_page_config(
     page_title="Control de Gastos y Ventas",
@@ -102,7 +104,7 @@ def safe_boot():
         st.warning("Fallo inicializando la tabla de usuarios; inicio en modo offline.")
         st.exception(e)  # opcional
 
-BYPASS_BOOT = os.environ.get("BYPASS", "1") == "1"
+BYPASS_BOOT = os.environ.get("BYPASS_BOOT", "1") == "1"
 
 if not BYPASS_BOOT:
     import auth_db as AUTH          # importar aquí
@@ -120,23 +122,21 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DB_FILE = (Path(__file__).parent / "data" / "finanzas.sqlite")
 
-if DATABASE_URL:
-    engine = create_engine(
-        DATABASE_URL,
-        pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=5,
-        echo=False,
-    )
-    DIALECT = "postgres"
-else:
-    DB_DIR = Path(__file__).parent / "data"
-    DB_DIR.mkdir(parents=True, exist_ok=True)
-    DB_FILE = DB_DIR / "finanzas.sqlite"
-    engine = create_engine(f"sqlite:///{DB_FILE}", future=True)
-    DIALECT = "sqlite"
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if not DATABASE_URL:
+    st.error("🚨 Falta DATABASE_URL. Configura el secret de Neon; no puedo arrancar con SQLite porque perderías datos al reiniciar.")
+    st.stop()
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=5,
+    echo=False,
+)
+DIALECT = "postgres"
 
 IS_CLOUD = os.getenv("STREAMLIT_RUNTIME", "") != ""
 if IS_CLOUD and DIALECT != "postgres":
@@ -517,6 +517,16 @@ def _db_sig() -> tuple[int, int]:
         return (int(s.st_mtime), int(s.st_size))
     except Exception:
         return (0, 0)
+    
+def _db_sig_runtime() -> tuple[int, int, int, int, int]:
+    with get_conn() as c:
+        a = c.execute(text("SELECT COALESCE(MAX(id),0) FROM transacciones")).scalar() or 0
+        b = c.execute(text("SELECT COALESCE(MAX(id),0) FROM gastos")).scalar() or 0
+        c1 = c.execute(text("SELECT COALESCE(MAX(id),0) FROM prestamos")).scalar() or 0
+        d = c.execute(text("SELECT COALESCE(MAX(id),0) FROM inventario")).scalar() or 0
+        e = c.execute(text("SELECT COALESCE(COUNT(*),0) FROM consolidado_diario")).scalar() or 0
+    return (int(a), int(b), int(c1), int(d), int(e))
+
 
 # ========== Sesiones persistentes (cookie) + login/roles ==========
 
@@ -1823,16 +1833,6 @@ def update_inventario_fields(row_id: int, payload: dict):
     audit("update", table_name="inventario", row_id=row_id, after=payload)
 
 
-def _db_sig_runtime() -> tuple[int, int, int, int, int]:
-    with get_conn() as c:
-        a = c.execute(text("SELECT COALESCE(MAX(id),0) FROM transacciones")).scalar() or 0
-        b = c.execute(text("SELECT COALESCE(MAX(id),0) FROM gastos")).scalar() or 0
-        c1 = c.execute(text("SELECT COALESCE(MAX(id),0) FROM prestamos")).scalar() or 0
-        d = c.execute(text("SELECT COALESCE(MAX(id),0) FROM inventario")).scalar() or 0
-        e = c.execute(text("SELECT COALESCE(COUNT(*),0) FROM consolidado_diario")).scalar() or 0
-    return (int(a), int(b), int(c1), int(d), int(e))
-
-
 # =========================================================
 # Helpers UI
 # =========================================================
@@ -2490,24 +2490,14 @@ BACKUP_DIR = Path(__file__).parent / "backups"
 BACKUP_EVERY_HOURS = 8
 KEEP_BACKUPS = 40
 
-def make_db_backup() -> Path:
+def make_db_backup() -> Path | None:
+    # En Postgres (Neon) no hay archivo local que respaldar
     if DIALECT != "sqlite":
-        raise RuntimeError("Backups locales sólo aplican en modo SQLite.")
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    backup_path = BACKUP_DIR / f"finanzas_{ts}.sqlite"
-    with sqlite3.connect(DB_FILE) as src, sqlite3.connect(backup_path) as dst:
-        src.backup(dst)
-    try:
-        files = sorted(BACKUP_DIR.glob("finanzas_*.sqlite"),
-                    key=lambda p: p.stat().st_mtime,
-                    reverse=True)
-        for p in files[KEEP_BACKUPS:]:
-            p.unlink(missing_ok=True)
-    except Exception:
-        pass
-    audit("backup.create", extra={"path": str(backup_path), "keep": KEEP_BACKUPS})
-    return backup_path
+        return None
+
+    DB_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # tu lógica de copia/zip si la tenías...
+    return DB_FILE if DB_FILE.exists() else None
 
 def auto_backup_if_due():
     try:
