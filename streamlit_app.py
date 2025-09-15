@@ -247,8 +247,8 @@ def _ensure_compact_query_params():
     except Exception:
         st.session_state["_qp_once"] = True
 
-if os.environ.get("DISABLE_COMPACT", "1") != "1":
-    _ensure_compact_query_params()
+# if os.environ.get("DISABLE_COMPACT", "1") != "1":
+#     _ensure_compact_query_params()
 
 
 
@@ -560,6 +560,8 @@ except Exception:
     st.warning("extra-streamlit-components no está instalado; usando sesión básica.")
 import math
 
+READ_XLSX_KW = dict(dtype=str, keep_default_na=False)  # siempre texto
+
 
 def _db_sig() -> tuple[int, int]:
     """Firma del archivo SQLite para invalidar la cache cuando cambie."""
@@ -604,7 +606,7 @@ if APP_SECRET == "cambia_esta_clave_larga_y_unica" and not ALLOW_DEFAULT_SECRET:
 SESSION_COOKIE = "finz_sess"
 LOGOUT_SENTINEL = "__force_logout"
 COOKIE_SECURE_FLAG = str(cfg("COOKIE_SECURE", "1")).strip() == "1"
-DEV_DEMO = str(cfg("DEV_DEMO_USERS", "0")).strip() == "1"
+DEV_DEMO = str(cfg("DEV_DEMO_USERS", "1")).strip() == "1"
 
 # CookieManager como widget (evita CachedWidgetWarning)
 _cookie_widget = stx.CookieManager()
@@ -651,7 +653,7 @@ USERS = {}
 if DEV_DEMO:
     USERS = {
         # Pon contraseñas “random” si de verdad necesitas demo local:
-        "admin": {"pw": hash_password(os.getenv("DEMO_ADMIN_PW", "cámbiame!")), "role": "admin"},
+        "admin": {"pw": hash_password(os.getenv("DEMO_ADMIN_PW", "admin123*")), "role": "admin"},
         "user1": {"pw": hash_password(os.getenv("DEMO_USER1_PW", "cámbiame!")), "role": "user"},
     }
 
@@ -4475,9 +4477,10 @@ elif show("⬆️ Importar/Exportar"):
             finish_and_refresh(f"Sincronizadas: {', '.join(sel)}")
 
     with col_b:
-        sa = st.session_state.get("_gs_sa_email", None) or "—"
+        sa = st.session_state.get("_gs_sa_email", "—") if GOOGLE_SHEETS_ENABLED else "—"
+        sid = (GSPREADSHEET_ID or "—") if GOOGLE_SHEETS_ENABLED else "—"
         st.caption(f"Service Account: {sa}")
-        st.caption(f"Sheet ID/URL: {GSPREADSHEET_ID or '—'}")
+        st.caption(f"Sheet ID/URL: {sid}")
 
 elif show("⚙️ Mi Cuenta"):
     st.subheader("Mi Cuenta")
