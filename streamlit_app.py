@@ -989,49 +989,55 @@ init_db()
 migrate_add_owner_columns()
 ensure_indexes()
 
-def _table_cols(conn, table):
-    cur = conn.exec_driver_sql(f"PRAGMA table_info({table})")
-    return {row[1] for row in cur.fetchall()}
+def _table_cols(conn, table: str) -> set[str]:
+    if DIALECT == "sqlite":
+        rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+        return {r[1] for r in rows}
+    else:
+        rows = conn.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name   = :t
+        """), {"t": table}).fetchall()
+        return {r[0] for r in rows}
 
-def _add_col_if_missing(conn, table, col_def):
-    name = col_def.split()[0]
-    if name not in _table_cols(conn, table):
-        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_def}"))
+def _add_col_if_missing(conn, table: str, col_def: str):
+    col_name = col_def.split()[0]
+    if DIALECT == "postgres":
+        conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_def}'))
+    else:
+        if not has_column(conn, table, col_name):
+            conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {col_def}'))
+
 
 def migrate_to_per_user_data():
+    tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
     try:
         with get_conn() as conn:
-            for t in ["transacciones","gastos","prestamos","inventario","deudores_ini"]:
-                _add_col_if_missing(conn, t, "owner TEXT")
-                conn.execute(text(
-                    f"UPDATE {t} SET owner=COALESCE(NULLIF(owner,''),'admin') "
-                    f"WHERE owner IS NULL OR owner=''"
-                ))
-                conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)"))
+            # 1) Asegurar columna owner
+            for t in tables:
+                if DIALECT == "postgres":
+                    conn.execute(text(f'ALTER TABLE {t} ADD COLUMN IF NOT EXISTS owner TEXT'))
+                else:
+                    if not has_column(conn, t, "owner"):
+                        conn.execute(text(f'ALTER TABLE {t} ADD COLUMN owner TEXT'))
 
-            cols = _table_cols(conn, "consolidado_diario")
-            if "owner" not in cols:
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS consolidado_diario_v2 (
-                      id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      fecha TEXT, efectivo REAL DEFAULT 0, notas TEXT, owner TEXT,
-                      UNIQUE(fecha, owner)
-                    )
-                """))
-                cur = conn.execute(text("SELECT fecha, efectivo, notas FROM consolidado_diario"))
-                for fecha, efectivo, notas in cur.fetchall():
-                    conn.execute(
-                        text("""INSERT OR IGNORE INTO consolidado_diario_v2
-                                (fecha, efectivo, notas, owner)
-                                VALUES (:f, :e, :n, 'admin')"""),
-                        {"f": fecha, "e": efectivo, "n": notas}
-                    )
-                conn.execute(text("DROP TABLE consolidado_diario"))
-                conn.execute(text("ALTER TABLE consolidado_diario_v2 RENAME TO consolidado_diario"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_consolidado_owner ON consolidado_diario(owner)"))
+            # 2) Backfill por defecto
+            for t in tables:
+                conn.execute(text(f"""
+                    UPDATE {t}
+                       SET owner = COALESCE(NULLIF(owner,''), :def_owner)
+                     WHERE owner IS NULL OR owner = ''
+                """), {"def_owner": "admin"})
+
+            # 3) Índices por owner (opcionales, útiles para filtros)
+            for t in tables:
+                conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{t}_owner ON {t}(owner)'))
+
     except Exception as e:
         st.warning(f"⚠️ Migración per-user falló: {e}")
-
+        
 migrate_to_per_user_data()
 
 # ========== Login form ==========
@@ -2558,6 +2564,27 @@ def make_db_backup() -> Path | None:
     DB_FILE.parent.mkdir(parents=True, exist_ok=True)
     # tu lógica de copia/zip si la tenías...
     return DB_FILE if DB_FILE.exists() else None
+
+def has_column(conn, table: str, col: str) -> bool:
+    """Devuelve True si la columna existe (SQLite o Postgres)."""
+    table = table.strip()
+    col = col.strip()
+    if DIALECT == "sqlite":
+        # PRAGMA es solo SQLite y debe ir por exec_driver_sql en SA 2.x
+        rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+        # índice 1 = nombre de columna
+        return any(r[1] == col for r in rows)
+    else:
+        # Postgres
+        q = text("""
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name   = :t
+              AND column_name  = :c
+            LIMIT 1
+        """)
+        return conn.execute(q, {"t": table, "c": col}).first() is not None
 
 def auto_backup_if_due():
     try:
