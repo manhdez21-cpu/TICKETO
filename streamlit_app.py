@@ -4798,13 +4798,19 @@ if is_admin() and show("🛠️ Administración"):
 
                 # 3) Vaciar tablas (¡sin users!)
                 with get_conn() as conn:
-                    tablas = [
-                        "transacciones","gastos","prestamos","inventario",
-                        "deudores_ini","consolidado_diario","audit_log"
-                    ]
-                    for t in tablas:
-                        conn.execute(f"DELETE FROM {t}")
-                    conn.execute("DELETE FROM meta")  # limpia metadatos (incluye cortes/ajustes)
+                    # Borra rápido y reinicia autoincrementos; respeta FKs con CASCADE
+                    conn.execute(text("""
+                        TRUNCATE TABLE
+                            transacciones,
+                            gastos,
+                            prestamos,
+                            inventario,
+                            deudores_ini,
+                            consolidado_diario,
+                            audit_log
+                        RESTART IDENTITY CASCADE
+                    """))
+                    conn.execute(text("DELETE FROM meta"))
 
                 audit("db.wipe", extra={})
 
