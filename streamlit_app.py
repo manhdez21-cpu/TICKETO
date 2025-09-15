@@ -188,6 +188,8 @@ engine = create_engine(
 )
 DIALECT = "postgres"
 
+USER_COL = '"user"' if DIALECT == "postgres" else "user"
+
 IS_CLOUD = os.getenv("STREAMLIT_RUNTIME", "") != ""
 if IS_CLOUD and DIALECT != "postgres":
     st.error("🚨 Producción sin DATABASE_URL: datos se perderán al reiniciar. "
@@ -868,10 +870,15 @@ def audit(action: str,
     try:
         with get_conn() as conn:
             conn.execute(
-                text("INSERT INTO audit_log(user, action, table_name, row_id, details) "
+                text(f"INSERT INTO audit_log({USER_COL}, action, table_name, row_id, details) "
                     "VALUES (:u, :a, :t, :rid, :d)"),
-                {"u": u, "a": action, "t": table_name, "rid": row_id,
-                "d": json.dumps(payload, ensure_ascii=False, default=str)}
+                {
+                    "u": u,
+                    "a": action,
+                    "t": table_name,
+                    "rid": row_id,
+                    "d": json.dumps(payload, ensure_ascii=False, default=str),
+                },
             )
     except Exception as e:
         # No romper la app por fallos de auditoría
@@ -949,9 +956,12 @@ def init_db():
     );
     """
     if DIALECT == "postgres":
-        # Ajustes de tipos/serial para Postgres
-        schema = schema.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY") \
-                       .replace("DOUBLE PRECISION", "DOUBLE PRECISION")
+        schema = (
+            schema
+            .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+            .replace("DOUBLE PRECISION", "DOUBLE PRECISION")
+            .replace("\n        user TEXT,", '\n        "user" TEXT,')  # ← añade esta línea
+        )
 
     with get_conn() as c:
         for stmt in [s.strip() for s in schema.split(";") if s.strip()]:
