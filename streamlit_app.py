@@ -85,6 +85,35 @@ os.environ.setdefault("DISABLE_COMPACT", "1")  # no fuerza ?compact=1&m=1 (evita
 os.environ.setdefault("DEV_DEMO_USERS", "1")   # habilita usuarios DEMO para login
 os.environ.setdefault("GSHEETS_ENABLED", "0")  # no intenta Google Sheets de entrada
 
+# --- Arranque seguro (soporta BYPASS_BOOT y ausencia de AUTH) -----------------
+def _try_safe_boot():
+    # Si quieres saltarte el boot en dev: export BYPASS_BOOT=1
+    if os.getenv("BYPASS_BOOT", "0") == "1":
+        return True, "BYPASS_BOOT=1 (arranque omitido)"
+
+    # Si hay un objeto AUTH con safe_boot, úsalo
+    try:
+        if 'AUTH' in globals() and hasattr(AUTH, "safe_boot") and callable(AUTH.safe_boot):
+            return AUTH.safe_boot()
+    except Exception as e:
+        # Si AUTH existe pero safe_boot falla, detén la app en producción
+        st.error(f"❌ Falló AUTH.safe_boot: {e}")
+        st.stop()
+
+    # Si no hay AUTH, permite continuar (modo sin auth)
+    return True, "AUTH no disponible (continuando sin autenticación)"
+
+def _is_admin(user: dict) -> bool:
+    try:
+        if 'AUTH' in globals() and hasattr(AUTH, "is_admin"):
+            return bool(AUTH.is_admin(user))
+    except Exception:
+        pass
+    # fallback por rol en el objeto de sesión
+    role = (user.get("role") or "").strip().lower() if isinstance(user, dict) else ""
+    return role == "admin"
+
+
 def safe_boot():
     # 1) Prueba de vida muy rápida
     try:
@@ -108,12 +137,13 @@ BYPASS_BOOT = os.environ.get("BYPASS_BOOT", "1") == "1"
 
 if not BYPASS_BOOT:
     import auth_db as AUTH          # importar aquí
-    ok, msg = AUTH.safe_boot()
+    ok, msg = _try_safe_boot()
     if not ok:
-        st.error(msg)
+        st.error(f"Inicio falló: {msg}")
         st.stop()
 else:
     st.session_state["_offline_auth"] = True
+    
 
 # === Conexión universal a BD (Postgres en prod, SQLite en local) ===
 import os
