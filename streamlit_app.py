@@ -154,7 +154,27 @@ from sqlalchemy.exc import OperationalError
 
 DB_FILE = (Path(__file__).parent / "data" / "finanzas.sqlite")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+import os, streamlit as st
+from sqlalchemy import create_engine
+
+def _get_database_url() -> str:
+    # 1) ENV (si ejecutas local con `export DATABASE_URL=...`)
+    env = os.getenv("DATABASE_URL", "").strip()
+    if env:
+        return env
+    # 2) Streamlit Cloud Secrets
+    try:
+        sec = str(st.secrets.get("DATABASE_URL", "")).strip()
+        if sec:
+            # opcional: propagar al env para que otras libs lo vean
+            os.environ["DATABASE_URL"] = sec
+            return sec
+    except Exception:
+        pass
+    return ""
+
+DATABASE_URL = _get_database_url()
+
 if not DATABASE_URL:
     st.error("🚨 Falta DATABASE_URL. Configura el secret de Neon; no puedo arrancar con SQLite porque perderías datos al reiniciar.")
     st.stop()
