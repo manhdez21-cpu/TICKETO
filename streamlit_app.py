@@ -1537,12 +1537,17 @@ def _to_int(v) -> int:
 def delete_consolidado(fecha_str: str):
     owner = _current_owner()
     with get_conn() as conn:
-        cur = conn.execute(text("SELECT * FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner)))
+        cur = conn.execute(
+            text("SELECT * FROM consolidado_diario WHERE fecha=:f AND owner=:o"),
+            {"f": fecha_str, "o": owner}
+        )
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
-        conn.execute(text("DELETE FROM consolidado_diario WHERE fecha=? AND owner=?", (fecha_str, owner)))
-    audit("delete", table_name="consolidado_diario", extra={"fecha": fecha_str, "owner": owner}, before=before)
+        conn.execute(text("DELETE FROM consolidado_diario WHERE fecha=:f AND owner=:o"),
+                     {"f": fecha_str, "o": owner})
+    audit("delete", table_name="consolidado_diario",
+          extra={"fecha": fecha_str, "owner": owner}, before=before)
 
 def upsert_consolidado(fecha_str: str, efectivo: float, notas: str=""):
     owner = _current_owner()
@@ -1594,17 +1599,13 @@ def insert_venta(r: dict, owner_override: str | None = None) -> int:
         'observacion': str(r.get('observacion') or '').strip(),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
+    sql = text("""
+        INSERT INTO transacciones
+        (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion, owner)
+        VALUES (:fecha, :cliente_nombre, :costo, :venta, :ganancia, :debe_flag, :paga, :abono1, :abono2, :observacion, :owner)
+    """)
     with get_conn() as conn:
-        cur = conn.execute(
-            text("""
-            INSERT INTO transacciones
-            (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion, owner)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (payload['fecha'], payload['cliente_nombre'], payload['costo'], payload['venta'],
-            payload['ganancia'], payload['debe_flag'], payload['paga'], payload['abono1'],
-            payload['abono2'], payload['observacion'], payload['owner'])
-        ))
+        cur = conn.execute(sql, payload)
         row_id = cur.lastrowid
     audit("insert", table_name="transacciones", row_id=row_id, after=payload)
     return row_id
@@ -1617,11 +1618,10 @@ def insert_gasto(r: dict, owner_override: str | None = None) -> int:
         'notas': str(r.get('notas') or '').strip(),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
+    sql = text("INSERT INTO gastos (fecha, concepto, valor, notas, owner) "
+               "VALUES (:fecha, :concepto, :valor, :notas, :owner)")
     with get_conn() as conn:
-        cur = conn.execute(
-            text("INSERT INTO gastos (fecha, concepto, valor, notas, owner) VALUES (?, ?, ?, ?, ?)",
-            (payload['fecha'], payload['concepto'], payload['valor'], payload['notas'], payload['owner'])
-        ))
+        cur = conn.execute(sql, payload)
         row_id = cur.lastrowid
     audit("insert", table_name="gastos", row_id=row_id, after=payload)
     return row_id
@@ -1632,41 +1632,31 @@ def insert_prestamo(r: dict, owner_override: str | None = None) -> int:
         'valor': _to_float(r.get('valor')),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
+    sql = text("INSERT INTO prestamos (nombre, valor, owner) "
+               "VALUES (:nombre, :valor, :owner)")
     with get_conn() as conn:
-        cur = conn.execute(
-            text("INSERT INTO prestamos (nombre, valor, owner) VALUES (?, ?, ?)",
-            (payload['nombre'], payload['valor'], payload['owner'])
-        ))
+        cur = conn.execute(sql, payload)
         row_id = cur.lastrowid
     audit("insert", table_name="prestamos", row_id=row_id, after=payload)
     return row_id
 
-def insert_inventario(data: dict):
-    # Owner por defecto desde la sesión (ajusta si usas otra clave)
-    u = st.session_state.get("user") or st.session_state.get("auth_user") or {}
-    owner = (u.get("username") or u.get("user") or st.session_state.get("owner") or "admin")
-
+def insert_inventario(r: dict, owner_override: str | None = None) -> int:
     payload = {
-        "producto": str(data.get("producto", "")).strip(),
-        "valor_costo": float(data.get("valor_costo") or 0),
-        "owner": owner
+        "producto": str(r.get("producto") or "").strip(),
+        "valor_costo": _to_float(r.get("valor_costo")),
+        "owner": (owner_override.strip() if owner_override else _row_owner()),
     }
 
-    if DIALECT == "postgres":
-        sql = text("""
-            INSERT INTO inventario (producto, valor_costo, owner)
-            VALUES (:producto, :valor_costo, :owner)
-            RETURNING id
-        """)
-    else:
-        sql = text("""
-            INSERT INTO inventario (producto, valor_costo, owner)
-            VALUES (:producto, :valor_costo, :owner)
-        """)
+    sql = text("""
+        INSERT INTO inventario (producto, valor_costo, owner)
+        VALUES (:producto, :valor_costo, :owner)
+    """)
 
     with get_conn() as conn:
         cur = conn.execute(sql, payload)
-        return (cur.scalar() if DIALECT == "postgres" else cur.lastrowid)
+        row_id = cur.lastrowid
+    audit("insert", table_name="inventario", row_id=row_id, after=payload)
+    return row_id
 
 def insert_deudor_ini(r: dict, owner_override: str | None = None) -> int:
     payload = {
@@ -1674,11 +1664,10 @@ def insert_deudor_ini(r: dict, owner_override: str | None = None) -> int:
         'valor': _to_float(r.get('valor')),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
+    sql = text("INSERT INTO deudores_ini (nombre, valor, owner) "
+               "VALUES (:nombre, :valor, :owner)")
     with get_conn() as conn:
-        cur = conn.execute(
-            "INSERT INTO deudores_ini (nombre, valor, owner) VALUES (?, ?, ?)",
-            (payload['nombre'], payload['valor'], payload['owner'])
-        )
+        cur = conn.execute(sql, payload)
         row_id = cur.lastrowid
     audit("insert", table_name="deudores_ini", row_id=row_id, after=payload)
     return row_id
