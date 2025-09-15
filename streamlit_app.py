@@ -4709,25 +4709,40 @@ if is_admin() and show("🛠️ Administración"):
         limit = st.number_input("Máx. registros", min_value=100, max_value=10000, value=1000, step=100)
 
         # consulta
-        q = "SELECT id, ts, user, action, table_name AS tabla, row_id, details FROM audit_log WHERE 1=1"
-        params = []
+        conds = ["1=1"]
+        p = {}
+
         if isinstance(rango, tuple) and len(rango) == 2:
-            q += " AND date(ts) BETWEEN ? AND ?"
-            params += [str(rango[0]), str(rango[1])]
+            # En Postgres es mejor castear: ts::date
+            conds.append("ts::date BETWEEN :d1 AND :d2")
+            p["d1"] = str(rango[0])
+            p["d2"] = str(rango[1])
+
         if usuario:
-            q += " AND user LIKE ?"
-            params.append(f"%{usuario.strip()}%")
+            # ILIKE para búsqueda case-insensitive en PG
+            conds.append('"user" ILIKE :u')
+            p["u"] = f"%{usuario.strip()}%"
+
         if acc:
-            q += " AND action LIKE ?"
-            params.append(f"%{acc.strip()}%")
+            conds.append("action ILIKE :a")
+            p["a"] = f"%{acc.strip()}%"
+
         if tabla:
-            q += " AND table_name LIKE ?"
-            params.append(f"%{tabla.strip()}%")
-        q += " ORDER BY id DESC LIMIT ?"
-        params.append(int(limit))
+            conds.append("table_name ILIKE :t")
+            p["t"] = f"%{tabla.strip()}%"
+
+        p["lim"] = int(limit)
+
+        q = f"""
+        SELECT id, ts, "user", action, table_name AS tabla, row_id, details
+        FROM audit_log
+        WHERE {' AND '.join(conds)}
+        ORDER BY id DESC
+        LIMIT :lim
+        """
 
         with get_conn() as conn:
-            df_aud = pd.read_sql_query(q, conn, params=params)
+            df_aud = pd.read_sql_query(text(q), conn, params=p)
 
         # vista amigable (columna details truncada)
         def _shorten(s, n=140):
