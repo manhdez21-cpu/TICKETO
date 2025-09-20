@@ -5,10 +5,12 @@
 #   streamlit run streamlit_app.py
 #.\.venv\Scripts\Activate
 
-from __future__ import annotations
 
 import streamlit as st
-import traceback
+
+import os
+st.info(f"CWD={os.getcwd()} | secrets keys={list(st.secrets.keys())}")
+
 import auth_db as AUTH
 from io import BytesIO
 from datetime import datetime
@@ -80,10 +82,11 @@ _apply_compact_css(_compact_level)
 
 
 import os
-os.environ.setdefault("BYPASS_BOOT", "1")      # salta ping a Neon → arranca offline
-os.environ.setdefault("DISABLE_COMPACT", "1")  # no fuerza ?compact=1&m=1 (evita loop)
-os.environ.setdefault("DEV_DEMO_USERS", "1")   # habilita usuarios DEMO para login
-os.environ.setdefault("GSHEETS_ENABLED", "0")  # no intenta Google Sheets de entrada
+import bcrypt  # needed for bcrypt hashes
+# REMOVED (optional flag): os.environ.setdefault("BYPASS_BOOT", "1")      # salta ping a Neon → arranca offline
+# REMOVED (optional flag): os.environ.setdefault("DISABLE_COMPACT", "1")  # no fuerza ?compact=1&m=1 (evita loop)
+# REMOVED (optional flag): os.environ.setdefault("DEV_DEMO_USERS", "1")   # habilita usuarios DEMO para login
+# REMOVED (optional flag): os.environ.setdefault("GSHEETS_ENABLED", "0")  # no intenta Google Sheets de entrada
 
 # --- Arranque seguro (soporta BYPASS_BOOT y ausencia de AUTH) -----------------
 def _try_safe_boot():
@@ -133,10 +136,9 @@ def safe_boot():
         st.warning("Fallo inicializando la tabla de usuarios; inicio en modo offline.")
         st.exception(e)  # opcional
 
-BYPASS_BOOT = os.environ.get("BYPASS_BOOT", "1") == "1"
+BYPASS_BOOT = str(st.secrets.get("BYPASS_BOOT", os.environ.get("BYPASS_BOOT", "0"))).strip() == "1"
 
 if not BYPASS_BOOT:
-    import auth_db as AUTH          # importar aquí
     ok, msg = _try_safe_boot()
     if not ok:
         st.error(f"Inicio falló: {msg}")
@@ -150,42 +152,47 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
 
 DB_FILE = (Path(__file__).parent / "data" / "finanzas.sqlite")
 
 import os, streamlit as st
 from sqlalchemy import create_engine
 
-def _get_database_url() -> str:
-    # 1) ENV (si ejecutas local con `export DATABASE_URL=...`)
-    env = os.getenv("DATABASE_URL", "").strip()
-    if env:
-        return env
-    # 2) Streamlit Cloud Secrets
-    try:
-        sec = str(st.secrets.get("DATABASE_URL", "")).strip()
-        if sec:
-            # opcional: propagar al env para que otras libs lo vean
-            os.environ["DATABASE_URL"] = sec
-            return sec
-    except Exception:
-        pass
-    return ""
+def _get_database_url():
+    url = (os.getenv("DATABASE_URL") or "").strip()
+    if not url:
+        try:  # raíz de secrets (si existiera)
+            url = str(st.secrets.get("DATABASE_URL","")).strip()
+        except Exception:
+            url = ""
+    if not url:
+        try:  # como lo tienes en secrets
+            url = str(st.secrets["connections"]["auth_db"].get("DATABASE_URL","")).strip()
+        except Exception:
+            url = url or ""
+    if not url:
+        try:  # variante 'url' de st.connection
+            url = str(st.secrets["connections"]["auth_db"].get("url","")).strip()
+        except Exception:
+            url = url or ""
+    if not url:
+        st.error("No encuentro DATABASE_URL en secrets/entorno.")
+        st.stop()
+    return url
 
-DATABASE_URL = _get_database_url()
+DB_URL = _get_database_url()
+engine = create_engine(DB_URL, pool_pre_ping=True)
 
-if not DATABASE_URL:
-    st.error("🚨 Falta DATABASE_URL. Configura el secret de Neon; no puedo arrancar con SQLite porque perderías datos al reiniciar.")
+try:
+    with engine.connect() as c:
+        c.execute(text("SELECT 1"))
+    DB_ONLINE = True
+except Exception as e:
+    DB_ONLINE = False
+    st.error("❌ No pude conectar a Neon. Revisa host/ssl/credenciales.")
+    st.exception(e)
     st.stop()
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=5,
-    echo=False,
-)
 DIALECT = "postgres"
 
 USER_COL = '"user"' if DIALECT == "postgres" else "user"
@@ -611,7 +618,6 @@ def _cookie_mgr():
 
 def hash_password(pw: str) -> str:
     try:
-        import bcrypt  # type: ignore
         return "bcrypt$" + bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     except Exception:
         salt = os.urandom(16)
@@ -633,7 +639,6 @@ def verify_password(pw: str, token: str) -> bool:
         return _verify_pbkdf2(pw, token)
     if token.startswith("bcrypt$") or token.startswith("$2"):
         try:
-            import bcrypt  # type: ignore
             raw = token.split("$",1)[1] if token.startswith("bcrypt$") else token
             return bcrypt.checkpw(pw.encode("utf-8"), raw.encode("utf-8"))
         except Exception:
@@ -876,8 +881,9 @@ def audit(action: str,
                 },
             )
     except Exception as e:
+        pass  # added to keep except block non-empty
         # No romper la app por fallos de auditoría
-        print("AUDIT ERROR:", e)
+# REMOVED (debug print):         print("AUDIT ERROR:", e)
 
 def init_db():
     schema = """
@@ -980,9 +986,39 @@ def ensure_indexes():
         for s in stmts:
             c.execute(text(s))
 
-init_db()
-migrate_add_owner_columns()
-ensure_indexes()
+from sqlalchemy import text
+
+def migrate_to_per_user_data():
+    """
+    Migra a datos por usuario si hiciera falta.
+    Corre de forma idempotente (IF NOT EXISTS).
+    """
+    url = _get_database_url()  # usa el helper que añadimos
+    from sqlalchemy import create_engine
+    eng = create_engine(url, pool_pre_ping=True)
+    with eng.begin() as conn:
+        conn.execute(text("ALTER TABLE IF EXISTS transacciones      ADD COLUMN IF NOT EXISTS owner TEXT"))
+        conn.execute(text("ALTER TABLE IF EXISTS gastos             ADD COLUMN IF NOT EXISTS owner TEXT"))
+        conn.execute(text("ALTER TABLE IF EXISTS prestamos          ADD COLUMN IF NOT EXISTS owner TEXT"))
+        conn.execute(text("ALTER TABLE IF EXISTS inventario         ADD COLUMN IF NOT EXISTS owner TEXT"))
+        conn.execute(text("ALTER TABLE IF EXISTS consolidado_diario ADD COLUMN IF NOT EXISTS owner TEXT"))
+        # índices opcionales (se crean solo si faltan)
+        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_trans_owner') IS NULL THEN CREATE INDEX idx_trans_owner ON transacciones(owner); END IF; END $$;"))
+        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_gastos_owner') IS NULL THEN CREATE INDEX idx_gastos_owner ON gastos(owner); END IF; END $$;"))
+        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_prest_owner')  IS NULL THEN CREATE INDEX idx_prest_owner  ON prestamos(owner); END IF; END $$;"))
+        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_inv_owner')    IS NULL THEN CREATE INDEX idx_inv_owner    ON inventario(owner); END IF; END $$;"))
+    return True
+
+
+@st.cache_resource
+def _boot_db_once():
+    init_db()
+    migrate_add_owner_columns()
+    ensure_indexes()
+    migrate_to_per_user_data()
+    return True
+
+_BOOT = _boot_db_once()
 
 def _table_cols(conn, table: str) -> set[str]:
     if DIALECT == "sqlite":
@@ -1034,6 +1070,16 @@ def migrate_to_per_user_data():
         st.warning(f"⚠️ Migración per-user falló: {e}")
         
 migrate_to_per_user_data()
+
+import os, streamlit as st, urllib.parse as _u
+_dbu = os.getenv("DATABASE_URL", "")
+_host = ""
+try:
+    _host = _u.urlsplit(_dbu.replace("+psycopg2","")).hostname or ""
+except Exception:
+    pass
+st.info(f"ONLINE(forzado) | DB host=" + (_host or "no-env") + f" | BYPASS_BOOT={os.getenv('BYPASS_BOOT')} | DEMO={os.getenv('DEV_DEMO_USERS')}")
+
 
 # ========== Login form ==========
 
@@ -1532,7 +1578,6 @@ def _sync_users_to_google_sheets(df, sheet_id: str):
     Requiere credenciales de Service Account en secrets:
       st.secrets['gcp_service_account']  (dict del JSON)
     """
-    import gspread  # carga perezosa
     # 1) Credenciales
     sa_dict = st.secrets.get("gcp_service_account") or st.secrets.get("google_service_account")
     if not sa_dict:
