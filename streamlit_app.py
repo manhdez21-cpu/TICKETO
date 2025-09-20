@@ -8,9 +8,6 @@
 
 import streamlit as st
 
-import os
-st.info(f"CWD={os.getcwd()} | secrets keys={list(st.secrets.keys())}")
-
 import auth_db as AUTH
 from io import BytesIO
 from datetime import datetime
@@ -24,7 +21,7 @@ from pathlib import Path
 
 # ✳️ PRIMERA y ÚNICA llamada de Streamlit:
 st.set_page_config(
-    page_title="Control de Gastos y Ventas",
+    page_title="TickeTo",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
