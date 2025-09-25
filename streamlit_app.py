@@ -1244,6 +1244,12 @@ ADJ_VENTAS_EFECTIVO = 0.0
 # =========================================================
 # Lectores cacheados (invalidados por mtime/size del .sqlite)
 # =========================================================
+@st.cache_data
+def read_consolidado_diario():
+    """Lee la tabla consolidado_diario para que finish_and_refresh pueda invalidarla selectivamente."""
+    with get_conn() as conn:
+        return pd.read_sql_query(text("SELECT * FROM consolidado_diario ORDER BY id DESC"), conn)
+
 @st.cache_data(show_spinner=False)
 def _read_ventas(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
     sql = text("SELECT * FROM transacciones" + ("" if view_all else " WHERE owner = :owner"))
