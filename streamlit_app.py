@@ -1875,87 +1875,64 @@ def delete_venta_id(row_id: int):
     view_all = _view_all_enabled()
     where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not view_all:
-        params["owner"] = _current_owner()
+    if not view_all: params["owner"] = _current_owner()
 
     with get_conn() as conn:
-        # 1) leer la fila antes de borrar (para auditoría)
         cur = conn.execute(text(f"SELECT * FROM transacciones WHERE {where}"), params)
-        row = cur.fetchone()
-        cols = [d[0] for d in cur.description] if cur.description else []
-        before = dict(zip(cols, row)) if row else None
-
-        # 2) borrar
+        m = cur.mappings().first()
+        before = dict(m) if m else None
         conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
 
-    # 3) auditar (si falla no detiene la app)
-    try:
-        audit("delete", table_name="transacciones", row_id=int(row_id), before=before)
-    except Exception:
-        pass
+    try: audit("delete", table_name="transacciones", row_id=int(row_id), before=before)
+    except Exception: pass
 
 
 def delete_gasto_id(row_id: int):
     view_all = _view_all_enabled()
     where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not view_all:
-        params["owner"] = _current_owner()
+    if not view_all: params["owner"] = _current_owner()
 
     with get_conn() as conn:
         cur = conn.execute(text(f"SELECT * FROM gastos WHERE {where}"), params)
-        row = cur.fetchone()
-        cols = [d[0] for d in cur.description] if cur.description else []
-        before = dict(zip(cols, row)) if row else None
-
+        m = cur.mappings().first()
+        before = dict(m) if m else None
         conn.execute(text(f"DELETE FROM gastos WHERE {where}"), params)
 
-    try:
-        audit("delete", table_name="gastos", row_id=int(row_id), before=before)
-    except Exception:
-        pass
+    try: audit("delete", table_name="gastos", row_id=int(row_id), before=before)
+    except Exception: pass
 
 
 def delete_prestamo_id(row_id: int):
     view_all = _view_all_enabled()
     where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not view_all:
-        params["owner"] = _current_owner()
+    if not view_all: params["owner"] = _current_owner()
 
     with get_conn() as conn:
         cur = conn.execute(text(f"SELECT * FROM prestamos WHERE {where}"), params)
-        row = cur.fetchone()
-        cols = [d[0] for d in cur.description] if cur.description else []
-        before = dict(zip(cols, row)) if row else None
-
+        m = cur.mappings().first()
+        before = dict(m) if m else None
         conn.execute(text(f"DELETE FROM prestamos WHERE {where}"), params)
 
-    try:
-        audit("delete", table_name="prestamos", row_id=int(row_id), before=before)
-    except Exception:
-        pass
+    try: audit("delete", table_name="prestamos", row_id=int(row_id), before=before)
+    except Exception: pass
 
 
 def delete_inventario_id(row_id: int):
     view_all = _view_all_enabled()
     where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not view_all:
-        params["owner"] = _current_owner()
+    if not view_all: params["owner"] = _current_owner()
 
     with get_conn() as conn:
         cur = conn.execute(text(f"SELECT * FROM inventario WHERE {where}"), params)
-        row = cur.fetchone()
-        cols = [d[0] for d in cur.description] if cur.description else []
-        before = dict(zip(cols, row)) if row else None
-
+        m = cur.mappings().first()
+        before = dict(m) if m else None
         conn.execute(text(f"DELETE FROM inventario WHERE {where}"), params)
 
-    try:
-        audit("delete", table_name="inventario", row_id=int(row_id), before=before)
-    except Exception:
-        pass
+    try: audit("delete", table_name="inventario", row_id=int(row_id), before=before)
+    except Exception: pass
 
 def update_venta_fields(row_id: int, payload: dict):
     # Normaliza numéricos si llegan como "3.000,00"
