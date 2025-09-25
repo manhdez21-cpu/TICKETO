@@ -1345,6 +1345,16 @@ def _read_deudores_ini(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.
 def read_deudores_ini() -> pd.DataFrame:
     return _read_deudores_ini(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
+CACHE_READERS = {
+    "transacciones": read_ventas,
+    "gastos": read_gastos,
+    "prestamos": read_prestamos,
+    "inventario": read_inventario,
+    # agrega los que ya usas en finish_and_refresh:
+    "deudores_ini": read_deudores_ini,
+    "consolidado_diario": read_consolidado_diario,  # usa aquí el nombre real de tu lector
+}
+
 # ========= Corte y unificación de deudores =========
 def get_corte_deudores() -> date:
     v = get_meta("CORTE_DEUDORES", "")
@@ -1668,6 +1678,34 @@ def _to_int(v) -> int:
 # =========================================================
 # Inserciones / Upserts
 # =========================================================
+
+# ===== Helpers DELETE unificado =====
+from sqlalchemy import text  # asegúrate de tener este import
+
+def _delete_where_params(row_id: int):
+    view_all = _view_all_enabled()
+    where = "id = :id" + ("" if view_all else " AND owner = :owner")
+    params = {"id": int(row_id)}
+    if not view_all:
+        params["owner"] = _current_owner()
+    return where, params
+
+def _delete_row(table: str, row_id: int):
+    where, params = _delete_where_params(row_id)
+    before = None
+    with get_conn() as conn:
+        cur = conn.execute(text(f"SELECT * FROM {table} WHERE {where}"), params)
+        r = cur.fetchone()
+        if r is not None and cur.description:
+            cols = [d[0] for d in cur.description]
+            before = dict(zip(cols, r))
+        conn.execute(text(f"DELETE FROM {table} WHERE {where}"), params)
+    try:
+        audit("delete", table_name=table, row_id=int(row_id), before=before)
+    except Exception:
+        pass
+
+
 def delete_consolidado(fecha_str: str):
     owner = _current_owner()
     with get_conn() as conn:
@@ -1829,74 +1867,89 @@ def _fetch_row_as_dict(conn: sqlite3.Connection, table: str, row_id: int) -> dic
 
 def delete_venta_id(row_id: int):
     view_all = _view_all_enabled()
-    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not _view_all_enabled(): params["owner"] = _current_owner()
-    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
+    if not view_all:
+        params["owner"] = _current_owner()
 
     with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM transacciones WHERE {where}", tuple(params))
+        # 1) leer la fila antes de borrar (para auditoría)
+        cur = conn.execute(text(f"SELECT * FROM transacciones WHERE {where}"), params)
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
 
-        conn.execute(f"DELETE FROM transacciones WHERE {where}", tuple(params))
+        # 2) borrar
+        conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
 
-    audit("delete", table_name="transacciones", row_id=int(row_id), before=before)
+    # 3) auditar (si falla no detiene la app)
+    try:
+        audit("delete", table_name="transacciones", row_id=int(row_id), before=before)
+    except Exception:
+        pass
 
 
 def delete_gasto_id(row_id: int):
     view_all = _view_all_enabled()
-    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not _view_all_enabled(): params["owner"] = _current_owner()
-    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
+    if not view_all:
+        params["owner"] = _current_owner()
 
     with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM gastos WHERE {where}", tuple(params))
+        cur = conn.execute(text(f"SELECT * FROM gastos WHERE {where}"), params)
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
 
-        conn.execute(f"DELETE FROM gastos WHERE {where}", tuple(params))
+        conn.execute(text(f"DELETE FROM gastos WHERE {where}"), params)
 
-    audit("delete", table_name="gastos", row_id=int(row_id), before=before)
+    try:
+        audit("delete", table_name="gastos", row_id=int(row_id), before=before)
+    except Exception:
+        pass
 
 
 def delete_prestamo_id(row_id: int):
     view_all = _view_all_enabled()
-    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not _view_all_enabled(): params["owner"] = _current_owner()
-    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
+    if not view_all:
+        params["owner"] = _current_owner()
 
     with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM prestamos WHERE {where}", tuple(params))
+        cur = conn.execute(text(f"SELECT * FROM prestamos WHERE {where}"), params)
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
 
-        conn.execute(f"DELETE FROM prestamos WHERE {where}", tuple(params))
+        conn.execute(text(f"DELETE FROM prestamos WHERE {where}"), params)
 
-    audit("delete", table_name="prestamos", row_id=int(row_id), before=before)
+    try:
+        audit("delete", table_name="prestamos", row_id=int(row_id), before=before)
+    except Exception:
+        pass
 
 
 def delete_inventario_id(row_id: int):
     view_all = _view_all_enabled()
-    where = "id = :id" + ("" if _view_all_enabled() else " AND owner = :owner")
+    where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not _view_all_enabled(): params["owner"] = _current_owner()
-    conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
+    if not view_all:
+        params["owner"] = _current_owner()
 
     with get_conn() as conn:
-        cur = conn.execute(f"SELECT * FROM inventario WHERE {where}", tuple(params))
+        cur = conn.execute(text(f"SELECT * FROM inventario WHERE {where}"), params)
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
 
-        conn.execute(f"DELETE FROM inventario WHERE {where}", tuple(params))
+        conn.execute(text(f"DELETE FROM inventario WHERE {where}"), params)
 
-    audit("delete", table_name="inventario", row_id=int(row_id), before=before)
+    try:
+        audit("delete", table_name="inventario", row_id=int(row_id), before=before)
+    except Exception:
+        pass
 
 def update_venta_fields(row_id: int, payload: dict):
     # Normaliza numéricos si llegan como "3.000,00"
@@ -2571,19 +2624,50 @@ def restore_from_gsheets_if_empty():
         st.warning(f"No se pudo restaurar desde Google Sheets: {e}")
 
 # ========= Refresco estandarizado =========
-def finish_and_refresh(msg: str | None = "Listo ✅", tables_to_sync: list[str] | None = None):
+def finish_and_refresh(
+    msg: str | None = "Listo ✅",
+    tables_to_sync: list[str] | None = None,
+    *,
+    rerun: bool = True
+):
+    """
+    Invalida SOLO las caches de las tablas indicadas y opcionalmente sincroniza a GSheet.
+    Luego muestra un flash y (opcional) hace rerun.
+    """
     try:
+        # 1) invalidación selectiva de caché
         if tables_to_sync:
-            sync_tables_to_gsheet(tables_to_sync)
+            for name in tables_to_sync:
+                f = CACHE_READERS.get(name)
+                if f:
+                    try:
+                        f.clear()
+                    except Exception:
+                        pass
+
+            # 2) sincronización solo de esas tablas (si aplica en tu app)
+            try:
+                sync_tables_to_gsheet(tables_to_sync)
+            except Exception:
+                pass
+
+        # 3) mensaje para el próximo run
         if msg:
-            flash_next_run(msg)   # <- en vez de notify_ok aquí
+            flash_next_run(msg)
+
+        # 4) backup/auditoría de usuario (igual que antes)
         u = st.session_state.get("auth_user")
         if u:
-            try: backup_user_flush_audit(u)
-            except Exception as _e: pass
+            try:
+                backup_user_flush_audit(u)
+            except Exception:
+                pass
+
     finally:
-        st.cache_data.clear()
-        st.rerun()
+        # ❌ NO limpies toda la cache global aquí
+        # ✅ Sólo rerun si lo pides
+        if rerun:
+            st.rerun()
 
 restore_from_gsheets_if_empty()
 # =========================
@@ -4595,7 +4679,7 @@ if is_admin() and show("🛠️ Administración"):
             sync_tables_to_gsheet(list(GSHEET_MAP.keys()))
             notify_ok("Sincronización enviada.")
     if c4.button("Limpiar caché y recargar ahora", use_container_width=True):
-        st.cache_data.clear(); st.rerun()
+        finish_and_refresh("Caché limpiada", list(CACHE_READERS.keys()))
     if c5.button("Cerrar sesión (admin)", use_container_width=True):
         _clear_session(); st.rerun()
 
