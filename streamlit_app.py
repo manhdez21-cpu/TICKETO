@@ -1690,10 +1690,13 @@ from sqlalchemy import text  # asegúrate de tener este import
 
 def _delete_where_params(row_id: int):
     view_all = _view_all_enabled()
-    where = "id = :id" + ("" if view_all else " AND owner = :owner")
-    params = {"id": int(row_id)}
-    if not view_all:
-        params["owner"] = _current_owner()
+    if view_all:
+        where  = "id = :id"
+        params = {"id": int(row_id)}
+    else:
+        # permite borrar si soy el dueño O si la fila no tiene owner (NULL/'')
+        where  = "id = :id AND (owner = :owner OR owner IS NULL OR owner = '')"
+        params = {"id": int(row_id), "owner": (_current_owner() or "")}
     return where, params
 
 def _delete_row(table: str, row_id: int):
@@ -1777,6 +1780,7 @@ def get_efectivo_global_now() -> tuple[float, str]:
     return 0.0, ""
 
 def insert_venta(r: dict, owner_override: str | None = None) -> int:
+    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'fecha': _to_date_str(r.get('fecha')),
         'cliente_nombre': str(r.get('cliente_nombre') or '').strip(),
@@ -1802,6 +1806,7 @@ def insert_venta(r: dict, owner_override: str | None = None) -> int:
     return row_id
 
 def insert_gasto(r: dict, owner_override: str | None = None) -> int:
+    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'fecha': _to_date_str(r.get('fecha')),
         'concepto': str(r.get('concepto') or '').strip(),
@@ -1818,6 +1823,7 @@ def insert_gasto(r: dict, owner_override: str | None = None) -> int:
     return row_id
 
 def insert_prestamo(r: dict, owner_override: str | None = None) -> int:
+    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'nombre': str(r.get('nombre') or '').strip(),
         'valor': _to_float(r.get('valor')),
@@ -1832,6 +1838,7 @@ def insert_prestamo(r: dict, owner_override: str | None = None) -> int:
     return row_id
 
 def insert_inventario(r: dict, owner_override: str | None = None) -> int:
+    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         "producto": str(r.get("producto") or "").strip(),
         "valor_costo": _to_float(r.get("valor_costo")),
@@ -1850,6 +1857,7 @@ def insert_inventario(r: dict, owner_override: str | None = None) -> int:
     return row_id
 
 def insert_deudor_ini(r: dict, owner_override: str | None = None) -> int:
+    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'nombre': str(r.get('nombre') or '').strip(),
         'valor': _to_float(r.get('valor')),
