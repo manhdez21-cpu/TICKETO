@@ -1769,23 +1769,19 @@ def _delete_where_params(row_id: int):
     return where, params
 
 def soft_delete_row(table: str, row_id: int):
-    """Marca la fila como eliminada (deleted_at = ahora)."""
     where, params = _delete_where_params(row_id)
     before = None
     with get_conn() as conn:
         cur = conn.execute(text(f"SELECT * FROM {table} WHERE {where}"), params)
-        r = cur.fetchone()
-        if r is not None and cur.description:
-            cols = [d[0] for d in cur.description]
-            before = dict(zip(cols, r))
+        # ------- FIX AQUÍ: no uses cur.description -------
+        m = cur.mappings().first()   # regresa un dict-like o None
+        before = dict(m) if m else None
+        # --------------------------------------------------
         if DIALECT == "postgres":
             conn.execute(text(f"UPDATE {table} SET deleted_at = NOW() WHERE {where}"), params)
         else:
             conn.execute(text(f"UPDATE {table} SET deleted_at = datetime('now') WHERE {where}"), params)
-    try:
-        audit("delete.soft", table_name=table, row_id=int(row_id), before=before)
-    except Exception:
-        pass
+    audit("delete.soft", table_name=table, row_id=int(row_id), before=before)
 
 def restore_row(table: str, row_id: int):
     """Quita la marca de eliminado."""
@@ -1798,20 +1794,16 @@ def restore_row(table: str, row_id: int):
         pass
 
 def hard_delete_row(table: str, row_id: int):
-    """Borrado definitivo (opcional: sólo admin)."""
     where, params = _delete_where_params(row_id)
     before = None
     with get_conn() as conn:
         cur = conn.execute(text(f"SELECT * FROM {table} WHERE {where}"), params)
-        r = cur.fetchone()
-        if r is not None and cur.description:
-            cols = [d[0] for d in cur.description]
-            before = dict(zip(cols, r))
+        # ------- FIX AQUÍ -------
+        m = cur.mappings().first()
+        before = dict(m) if m else None
+        # ------------------------
         conn.execute(text(f"DELETE FROM {table} WHERE {where}"), params)
-    try:
-        audit("delete.hard", table_name=table, row_id=int(row_id), before=before)
-    except Exception:
-        pass
+    audit("delete.hard", table_name=table, row_id=int(row_id), before=before)
 
 def _delete_row(table: str, row_id: int):
     where, params = _delete_where_params(row_id)
@@ -3951,37 +3943,34 @@ if show("🧮 Diario Consolidado"):
     total_ganancia= float(v_df['ganancia'].sum()) if not v_df.empty else 0.0
 
     # ---- necesarios para este bloque ----
-    # Deudores desde (corte actual)
-    corte_actual = get_corte_deudores()
-    _, nuevo_total = deudores_unificados(corte_actual)
+    # Deudores “totales” (se muestran aunque sea 0)
+    _, total_deu = deudores_sin_corte()
 
-    # Efectivo global actual y métrica
+    # Efectivo global actual y métrica superior
     efectivo_ini, _ = get_efectivo_global_now()
     metric_box = st.empty()
     metric_box.metric("EFECTIVO", money(efectivo_ini))
     # -------------------------------------
 
-    # === Tarjetas alineadas y filtradas (oculta vacías y también 0) ===
+    # === Tarjetas alineadas (no ocultar ceros) ===
     items = [
         {"title": "Total ventas",     "value": total_ventas,     "fmt": money},
-        {"title": "Ganancia total",   "value": total_ganancia,   "fmt": money},
         {"title": "Gastos totales",   "value": total_gastos,     "fmt": money},
         {"title": "Costos totales",   "value": total_costos,     "fmt": money},
         {"title": "Total préstamos",  "value": total_prestamos,  "fmt": money},
-        {"title": "Inventario total", "value": total_inventario, "fmt": money},
+        {"title": "Inventario total", "value": total_inventario, "fmt": money},  # 👈 ya lo tenías
+        {"title": "Deudores totales", "value": total_deu,        "fmt": money},  # 👈 NUEVO
     ]
-
-    render_stat_cards(items, hide_empty=True, hide_zero=True)
+    render_stat_cards(items, hide_empty=True, hide_zero=False)  # 👈 no ocultes 0
 
     # Layout 2:1 — izquierda: monto + guardar / derecha: confirmar + eliminar
     colL, colR = st.columns([2, 1], gap="small")
 
     with colL:
-        CONS_efectivo = currency_input("Efectivo en caja", key="CONS_efectivo_input",
-                                    value=float(efectivo_ini))
-        if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True,
-                    key="CONS_efectivo_save"):
-            # Guardamos sin notas
+        # (deja visible el input arriba)
+        CONS_efectivo = currency_input("Efectivo en caja", key="CONS_efectivo_input", value=float(efectivo_ini))
+        # Botón guardar
+        if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True, key="CONS_efectivo_save"):
             upsert_consolidado("GLOBAL", float(CONS_efectivo), "")
             nuevo_ef, _ = get_efectivo_global_now()
             metric_box.metric("EFECTIVO", money(nuevo_ef))
@@ -3989,10 +3978,10 @@ if show("🧮 Diario Consolidado"):
             finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
 
     with colR:
-        st.markdown("&nbsp;", unsafe_allow_html=True)  # pequeño espacio vertical
+        # 🔧 Espaciador para alinear el botón de eliminación a la altura del de Guardar
+        st.markdown("<div style='height:38px'></div>", unsafe_allow_html=True)  # ~altura del input de la izquierda
         confirm_del = st.checkbox("Confirmar eliminación", key="CONS_del_confirm")
-        if st.button("🗑️ Eliminar efectivo (global)", use_container_width=True,
-                    disabled=not confirm_del, key="CONS_efectivo_delete"):
+        if st.button("🗑️ Eliminar efectivo (global)", use_container_width=True, disabled=not confirm_del, key="CONS_efectivo_delete"):
             delete_consolidado("GLOBAL")
             metric_box.metric("EFECTIVO", money(0.0))
             finish_and_refresh("Efectivo (GLOBAL) eliminado.", ["consolidado_diario"])
