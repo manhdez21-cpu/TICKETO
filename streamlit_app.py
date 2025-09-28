@@ -226,6 +226,8 @@ def _update_row(table: str, row_id: int, payload: dict):
 if os.getenv("DEBUG_UI") == "1":
     st.write("🟢 Arrancando interfaz… (modo mínimo)")
 
+
+
 # --- Forzar compact por URL sin JS ni DOM hacks ---
 def _ensure_compact_query_params():
     try:
@@ -842,6 +844,19 @@ def migrate_add_owner_columns():
         for t in tables:
             conn.execute(text(f"UPDATE {t} SET owner='admin' WHERE owner IS NULL OR owner=''"))
 
+def migrate_add_deleted_at():
+    tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
+    with get_conn() as conn:
+        for t in tables:
+            if DIALECT == "postgres":
+                conn.execute(text(f'ALTER TABLE {t} ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL'))
+            else:
+                # SQLite no soporta IF NOT EXISTS en ADD COLUMN
+                rows = conn.exec_driver_sql(f"PRAGMA table_info({t})").fetchall()
+                cols = {r[1] for r in rows}
+                if "deleted_at" not in cols:
+                    conn.execute(text(f'ALTER TABLE {t} ADD COLUMN deleted_at TEXT NULL'))
+
 def audit(action: str,
         table_name: str | None = None,
         row_id: int | None = None,
@@ -1013,6 +1028,7 @@ def _boot_db_once():
     migrate_add_owner_columns()
     ensure_indexes()
     migrate_to_per_user_data()
+    migrate_add_deleted_at()   # 👈 nuevo
     return True
 
 _BOOT = _boot_db_once()
@@ -1252,7 +1268,8 @@ def read_consolidado_diario():
 
 @st.cache_data(show_spinner=False)
 def _read_ventas(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    sql = text("SELECT * FROM transacciones" + ("" if view_all else " WHERE owner = :owner"))
+    base = "SELECT * FROM transacciones WHERE (deleted_at IS NULL)"
+    sql = text(base + ("" if view_all else " AND owner = :owner"))
     params = None if view_all else {"owner": owner}
     with get_conn() as conn:
         df = pd.read_sql_query(sql, conn, params=params)
@@ -1275,7 +1292,8 @@ def read_ventas() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def _read_gastos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    stmt = text("SELECT * FROM gastos" + ("" if view_all else " WHERE owner = :owner"))
+    base = "SELECT * FROM gastos WHERE (deleted_at IS NULL)"
+    stmt = text(base + ("" if view_all else " AND owner = :owner"))
     params = None if view_all else {"owner": owner}
     with get_conn() as conn:
         df = pd.read_sql_query(stmt, conn, params=params)
@@ -1291,7 +1309,8 @@ def read_gastos() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def _read_prestamos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    stmt = text("SELECT * FROM prestamos" + ("" if view_all else " WHERE owner = :owner"))
+    base = "SELECT * FROM prestamos WHERE (deleted_at IS NULL)"
+    stmt = text(base + ("" if view_all else " AND owner = :owner"))
     params = None if view_all else {"owner": owner}
     with get_conn() as conn:
         df = pd.read_sql_query(stmt, conn, params=params)
@@ -1306,7 +1325,8 @@ def read_prestamos() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def _read_inventario(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    stmt = text("SELECT * FROM inventario" + ("" if view_all else " WHERE owner = :owner"))
+    base = "SELECT * FROM inventario WHERE (deleted_at IS NULL)"
+    stmt = text(base + ("" if view_all else " AND owner = :owner"))
     params = None if view_all else {"owner": owner}
     with get_conn() as conn:
         df = pd.read_sql_query(stmt, conn, params=params)
@@ -1321,7 +1341,8 @@ def read_inventario() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def _read_consolidado(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    stmt = text("SELECT * FROM consolidado_diario" + ("" if view_all else " WHERE owner = :owner"))
+    base = "SELECT * FROM consolidado_diario WHERE (deleted_at IS NULL)"
+    stmt = text(base + ("" if view_all else " AND owner = :owner"))
     params = None if view_all else {"owner": owner}
     with get_conn() as conn:
         df = pd.read_sql_query(stmt, conn, params=params)
@@ -1338,7 +1359,8 @@ def read_consolidado() -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def _read_deudores_ini(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
-    stmt = text("SELECT * FROM deudores_ini" + ("" if view_all else " WHERE owner = :owner"))
+    base = "SELECT * FROM deudores_ini WHERE (deleted_at IS NULL)"
+    stmt = text(base + ("" if view_all else " AND owner = :owner"))
     params = None if view_all else {"owner": owner}
     with get_conn() as conn:
         df = pd.read_sql_query(stmt, conn, params=params)
@@ -1699,6 +1721,51 @@ def _delete_where_params(row_id: int):
         params = {"id": int(row_id), "owner": (_current_owner() or "")}
     return where, params
 
+def soft_delete_row(table: str, row_id: int):
+    """Marca la fila como eliminada (deleted_at = ahora)."""
+    where, params = _delete_where_params(row_id)
+    before = None
+    with get_conn() as conn:
+        cur = conn.execute(text(f"SELECT * FROM {table} WHERE {where}"), params)
+        r = cur.fetchone()
+        if r is not None and cur.description:
+            cols = [d[0] for d in cur.description]
+            before = dict(zip(cols, r))
+        if DIALECT == "postgres":
+            conn.execute(text(f"UPDATE {table} SET deleted_at = NOW() WHERE {where}"), params)
+        else:
+            conn.execute(text(f"UPDATE {table} SET deleted_at = datetime('now') WHERE {where}"), params)
+    try:
+        audit("delete.soft", table_name=table, row_id=int(row_id), before=before)
+    except Exception:
+        pass
+
+def restore_row(table: str, row_id: int):
+    """Quita la marca de eliminado."""
+    where, params = _delete_where_params(row_id)
+    with get_conn() as conn:
+        conn.execute(text(f"UPDATE {table} SET deleted_at = NULL WHERE {where}"), params)
+    try:
+        audit("delete.restore", table_name=table, row_id=int(row_id))
+    except Exception:
+        pass
+
+def hard_delete_row(table: str, row_id: int):
+    """Borrado definitivo (opcional: sólo admin)."""
+    where, params = _delete_where_params(row_id)
+    before = None
+    with get_conn() as conn:
+        cur = conn.execute(text(f"SELECT * FROM {table} WHERE {where}"), params)
+        r = cur.fetchone()
+        if r is not None and cur.description:
+            cols = [d[0] for d in cur.description]
+            before = dict(zip(cols, r))
+        conn.execute(text(f"DELETE FROM {table} WHERE {where}"), params)
+    try:
+        audit("delete.hard", table_name=table, row_id=int(row_id), before=before)
+    except Exception:
+        pass
+
 def _delete_row(table: str, row_id: int):
     where, params = _delete_where_params(row_id)
     before = None
@@ -1725,8 +1792,12 @@ def delete_consolidado(fecha_str: str):
         row = cur.fetchone()
         cols = [d[0] for d in cur.description] if cur.description else []
         before = dict(zip(cols, row)) if row else None
-        conn.execute(text("DELETE FROM consolidado_diario WHERE fecha=:f AND owner=:o"),
-                     {"f": fecha_str, "o": owner})
+        if DIALECT == "postgres":
+            conn.execute(text("UPDATE consolidado_diario SET deleted_at = NOW() WHERE fecha=:f AND owner=:o"),
+                        {"f": fecha_str, "o": owner})
+        else:
+            conn.execute(text("UPDATE consolidado_diario SET deleted_at = datetime('now') WHERE fecha=:f AND owner=:o"),
+                        {"f": fecha_str, "o": owner})
     audit("delete", table_name="consolidado_diario",
           extra={"fecha": fecha_str, "owner": owner}, before=before)
 
@@ -1896,51 +1967,15 @@ def delete_venta_id(row_id: int):
 
 
 def delete_gasto_id(row_id: int):
-    view_all = _view_all_enabled()
-    where = "id = :id" + ("" if view_all else " AND owner = :owner")
-    params = {"id": int(row_id)}
-    if not view_all: params["owner"] = _current_owner()
-
-    with get_conn() as conn:
-        cur = conn.execute(text(f"SELECT * FROM gastos WHERE {where}"), params)
-        m = cur.mappings().first()
-        before = dict(m) if m else None
-        conn.execute(text(f"DELETE FROM gastos WHERE {where}"), params)
-
-    try: audit("delete", table_name="gastos", row_id=int(row_id), before=before)
-    except Exception: pass
+    soft_delete_row("gastos", int(row_id))
 
 
 def delete_prestamo_id(row_id: int):
-    view_all = _view_all_enabled()
-    where = "id = :id" + ("" if view_all else " AND owner = :owner")
-    params = {"id": int(row_id)}
-    if not view_all: params["owner"] = _current_owner()
-
-    with get_conn() as conn:
-        cur = conn.execute(text(f"SELECT * FROM prestamos WHERE {where}"), params)
-        m = cur.mappings().first()
-        before = dict(m) if m else None
-        conn.execute(text(f"DELETE FROM prestamos WHERE {where}"), params)
-
-    try: audit("delete", table_name="prestamos", row_id=int(row_id), before=before)
-    except Exception: pass
+    soft_delete_row("prestamos", int(row_id))
 
 
 def delete_inventario_id(row_id: int):
-    view_all = _view_all_enabled()
-    where = "id = :id" + ("" if view_all else " AND owner = :owner")
-    params = {"id": int(row_id)}
-    if not view_all: params["owner"] = _current_owner()
-
-    with get_conn() as conn:
-        cur = conn.execute(text(f"SELECT * FROM inventario WHERE {where}"), params)
-        m = cur.mappings().first()
-        before = dict(m) if m else None
-        conn.execute(text(f"DELETE FROM inventario WHERE {where}"), params)
-
-    try: audit("delete", table_name="inventario", row_id=int(row_id), before=before)
-    except Exception: pass
+    soft_delete_row("inventario", int(row_id))
 
 def update_venta_fields(row_id: int, payload: dict):
     # Normaliza numéricos si llegan como "3.000,00"
@@ -2031,6 +2066,8 @@ def show_flash_if_any():
     except Exception:
         pass
     st.success(msg)
+
+
 
 def currency_input(label: str, key: str, value: float = 0.0,
                 help: str | None = None, in_form: bool = False, live: bool = True) -> float:
@@ -4373,6 +4410,32 @@ elif show("💸 Gastos"):
                 finish_and_refresh(f"Eliminados {len(ids)} gastos.", ["gastos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
+            ver_eliminados_g = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="GTO_show_del")
+
+if ver_eliminados_g:
+    with get_conn() as conn:
+        base = "SELECT id, fecha, concepto, valor, notas FROM gastos WHERE deleted_at IS NOT NULL"
+        if _view_all_enabled():
+            q = text(base + " ORDER BY id DESC")
+            params = {}
+        else:
+            q = text(base + " AND owner=:o ORDER BY id DESC")
+            params = {"o": _current_owner()}
+        g_del = pd.read_sql_query(q, conn, params=params or None)
+
+        if g_del.empty:
+            st.info("No hay gastos eliminados.")
+        else:
+            for _, row in g_del.iterrows():
+                c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                with c_info:
+                    st.markdown(f"**{row['fecha']}** — {row['concepto']} • ${row['valor']:,.0f}")
+                if c_restore.button("↩️ Restaurar", key=f"restore_g_{int(row['id'])}"):
+                    restore_row("gastos", int(row["id"]))
+                    st.cache_data.clear(); st.rerun()
+                if is_admin() and c_hard.button("❌ Borrar", key=f"hard_g_{int(row['id'])}"):
+                    hard_delete_row("gastos", int(row["id"]))
+                    st.cache_data.clear(); st.rerun()
 
 # ---------------------------------------------------------
 # Préstamos
@@ -4460,6 +4523,33 @@ elif show("🤝 Préstamos"):
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
 
+        ver_eliminados_p = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="PRE_show_del")
+
+        if ver_eliminados_p:
+            with get_conn() as conn:
+                base = "SELECT id, nombre, valor FROM prestamos WHERE deleted_at IS NOT NULL"
+                if _view_all_enabled():
+                    q = text(base + " ORDER BY id DESC")
+                    params = {}
+                else:
+                    q = text(base + " AND owner=:o ORDER BY id DESC")
+                    params = {"o": _current_owner()}
+                p_del = pd.read_sql_query(q, conn, params=params or None)
+
+                if p_del.empty:
+                    st.info("No hay préstamos eliminados.")
+                else:
+                    for _, row in p_del.iterrows():
+                        c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                        with c_info:
+                            st.markdown(f"**{row['nombre']}** — ${row['valor']:,.0f}")
+                        if c_restore.button("↩️ Restaurar", key=f"restore_p_{int(row['id'])}"):
+                            restore_row("prestamos", int(row["id"]))
+                            st.cache_data.clear(); st.rerun()
+                        if is_admin() and c_hard.button("❌ Borrar", key=f"hard_p_{int(row['id'])}"):
+                            hard_delete_row("prestamos", int(row["id"]))
+                            st.cache_data.clear(); st.rerun()
+
         st.divider()
 
     else:
@@ -4538,6 +4628,33 @@ elif show("📦 Inventario"):
                 finish_and_refresh(f"Eliminados {len(ids)} ítems.", ["inventario"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
+
+        ver_eliminados_i = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="INV_show_del")
+
+if ver_eliminados_i:
+    with get_conn() as conn:
+        base = "SELECT id, producto, valor_costo FROM inventario WHERE deleted_at IS NOT NULL"
+        if _view_all_enabled():
+            q = text(base + " ORDER BY id DESC")
+            params = {}
+        else:
+            q = text(base + " AND owner=:o ORDER BY id DESC")
+            params = {"o": _current_owner()}
+        i_del = pd.read_sql_query(q, conn, params=params or None)
+
+        if i_del.empty:
+            st.info("No hay ítems eliminados.")
+        else:
+            for _, row in i_del.iterrows():
+                c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                with c_info:
+                    st.markdown(f"**{row['producto']}** — ${row['valor_costo']:,.0f}")
+                if c_restore.button("↩️ Restaurar", key=f"restore_i_{int(row['id'])}"):
+                    restore_row("inventario", int(row["id"]))
+                    st.cache_data.clear(); st.rerun()
+                if is_admin() and c_hard.button("❌ Borrar", key=f"hard_i_{int(row['id'])}"):
+                    hard_delete_row("inventario", int(row["id"]))
+                    st.cache_data.clear(); st.rerun()
 
 # ---------------------------------------------------------
 # Deudores
