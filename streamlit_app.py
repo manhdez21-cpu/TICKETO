@@ -17,6 +17,53 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+st.markdown("""
+<style>
+.stat-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+@media (max-width: 1024px) {.stat-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }}
+@media (max-width: 640px)  {.stat-grid { grid-template-columns: repeat(1, minmax(0,1fr)); }}
+.stat-card {
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 14px; padding: 14px 16px;
+  background: white; min-height: 84px; display:flex; flex-direction:column; justify-content:center;
+}
+.stat-title { font-size:11px; letter-spacing:.06em; color:#6b7280; text-transform:uppercase; margin-bottom:6px; }
+.stat-value { font-size:22px; font-weight:600; color:#111827; }
+</style>
+""", unsafe_allow_html=True)
+
+def render_stat_cards(items, hide_empty=True, hide_zero=False):
+    """
+    items: lista de dicts con {'title': str, 'value': Any, 'fmt': callable|None}
+    hide_empty: oculta tarjetas con title vacío o value en [None, ""]
+    hide_zero: además oculta tarjetas con value == 0 o 0.0
+    """
+    def _ok(v):
+        if v is None or v == "": return False
+        if hide_zero and (isinstance(v, (int, float)) and float(v) == 0.0): return False
+        return True
+
+    clean = []
+    for it in items:
+        title = str(it.get("title", "")).strip()
+        val   = it.get("value", None)
+        if hide_empty and (not title or not _ok(val)): 
+            continue
+        fmt = it.get("fmt")
+        s = fmt(val) if callable(fmt) else (f"{val:,}" if isinstance(val, (int,float)) else str(val))
+        clean.append((title, s))
+
+    if not clean:
+        return
+
+    st.markdown('<div class="stat-grid">', unsafe_allow_html=True)
+    for title, sval in clean:
+        st.markdown(
+            f'<div class="stat-card"><div class="stat-title">{title}</div>'
+            f'<div class="stat-value">{sval}</div></div>',
+            unsafe_allow_html=True
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ✳️ PRIMERA y ÚNICA llamada de Streamlit:
@@ -1091,7 +1138,6 @@ try:
     _host = _u.urlsplit(_dbu.replace("+psycopg2","")).hostname or ""
 except Exception:
     pass
-st.info(f"ONLINE(forzado) | DB host=" + (_host or "no-env") + f" | BYPASS_BOOT={os.getenv('BYPASS_BOOT')} | DEMO={os.getenv('DEV_DEMO_USERS')}")
 
 
 # ========== Login form ==========
@@ -3903,37 +3949,15 @@ if show("🧮 Diario Consolidado"):
     total_ventas  = float(total_cuenta + total_efectivo)
     total_ganancia= float(v_df['ganancia'].sum()) if not v_df.empty else 0.0
 
-    # ===== Fila 1 =====
-    st.markdown('<div class="mm-grid">', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3, gap="small")
-    with c1: stat_min("Total ventas",   money(total_ventas),   "var(--pri)")
-    with c2: stat_min("Ganancia total", money(total_ganancia), "var(--accent)")
-    with c3: stat_min("Gastos totales", money(total_gastos),   "var(--border)")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ===== Fila 2 =====
-    st.markdown('<div class="mm-grid">', unsafe_allow_html=True)
-    c4, c5, c6 = st.columns(3, gap="small"  )
-    with c4: stat_min("Costos totales",   money(total_costos),    "var(--border)")
-    with c5: stat_min("Total préstamos",  money(total_prestamos), "var(--pri)")
-    with c6: stat_min("Inventario total", money(total_inventario),"var(--border)")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ===== Deudores =====
-    corte_actual = get_corte_deudores()
-    _, nuevo_total = deudores_unificados(corte_actual)
-    st.markdown('<div class="mm-grid">', unsafe_allow_html=True)
-    d1, d2, _ = st.columns([1,1,1], gap="small")
-    with d2: stat_min(f"Deudores desde", money(nuevo_total), "var(--pri)")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ===== Efectivo global (minimal) =====
-    st.markdown('<div class="mm-card">', unsafe_allow_html=True)
-    st.markdown("### Efectivo (manual)")
-
-    efectivo_ini, _ = get_efectivo_global_now()
-    metric_box = st.empty()
-    metric_box.metric("EFECTIVO", money(efectivo_ini))
+    # === Tarjetas alineadas y filtradas (oculta vacías y también 0) ===
+    items = [
+        {"title": "Total ventas",     "value": total_ventas,     "fmt": money},
+        {"title": "Ganancia total",   "value": total_ganancia,   "fmt": money},
+        {"title": "Gastos totales",   "value": total_gastos,     "fmt": money},
+        {"title": "Costos totales",   "value": total_costos,     "fmt": money},
+        {"title": "Total préstamos",  "value": total_prestamos,  "fmt": money},
+        {"title": "Inventario total", "value": total_inventario, "fmt": money},
+    ]
 
     # Layout 2:1 — izquierda: monto + guardar / derecha: confirmar + eliminar
     colL, colR = st.columns([2, 1], gap="small")
