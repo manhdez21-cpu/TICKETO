@@ -4704,6 +4704,55 @@ elif show("⬆️ Importar/Exportar"):
         sid = (GSPREADSHEET_ID or "—") if GOOGLE_SHEETS_ENABLED else "—"
         st.caption(f"Service Account: {sa}")
         st.caption(f"Sheet ID/URL: {sid}")
+    
+    # === Limpieza rápida (borrado lógico por tipo) ===
+    st.markdown("### Limpieza rápida")
+
+    def _now_sql():
+        return "NOW()" if DIALECT == "postgres" else "datetime('now')"
+
+    owner = _current_owner()
+    view_all = _view_all_enabled()
+
+    def _count_rows(table: str) -> int:
+        params = {}
+        where = "WHERE deleted_at IS NULL"
+        if not view_all:
+            where += " AND owner = :o"
+            params["o"] = owner
+        with get_conn() as conn:
+            return int(conn.execute(text(f"SELECT COUNT(*) FROM {table} {where}"), params).scalar() or 0)
+
+    def _soft_delete_all(table: str):
+        params = {}
+        where = "WHERE deleted_at IS NULL"
+        if not view_all:
+            where += " AND owner = :o"
+            params["o"] = owner
+        with get_conn() as conn:
+            conn.execute(text(f"UPDATE {table} SET deleted_at = {_now_sql()} {where}"), params)
+        st.cache_data.clear(); st.rerun()
+
+    c1, c2, c3 = st.columns(3, gap="small")
+
+    with c1:
+        st.caption("VENTAS (transacciones)")
+        st.metric("Registros", _count_rows("transacciones"))
+        if st.button("🗑️ Eliminar ventas", use_container_width=True, key="bulk_del_ventas"):
+            _soft_delete_all("transacciones")
+
+    with c2:
+        st.caption("GASTOS")
+        st.metric("Registros", _count_rows("gastos"))
+        if st.button("🗑️ Eliminar gastos", use_container_width=True, key="bulk_del_gastos"):
+            _soft_delete_all("gastos")
+
+    with c3:
+        st.caption("PRÉSTAMOS")
+        st.metric("Registros", _count_rows("prestamos"))
+        if st.button("🗑️ Eliminar préstamos", use_container_width=True, key="bulk_del_prestamos"):
+            _soft_delete_all("prestamos")
+
 
 elif show("⚙️ Mi Cuenta"):
     st.subheader("Mi Cuenta")
