@@ -3939,6 +3939,7 @@ if show("🧮 Diario Consolidado"):
     d_ini = read_deudores_ini()
     total_deudores_ini = float(d_ini['valor'].sum()) if not d_ini.empty else 0.0
 
+    _, total_deu = deudores_sin_corte()
     total_ventas  = float(total_cuenta + total_efectivo)
     total_ganancia= float(v_df['ganancia'].sum()) if not v_df.empty else 0.0
 
@@ -3987,7 +3988,7 @@ if show("🧮 Diario Consolidado"):
             finish_and_refresh("Efectivo (GLOBAL) eliminado.", ["consolidado_diario"])
 
     # ===== Total de capital (minimal) =====
-    total_capital = float(nuevo_total + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
+    total_capital = float(total_deu + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
     st.markdown(
         f'''
         <div class="mm-card">
