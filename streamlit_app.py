@@ -1981,7 +1981,7 @@ def delete_prestamo_id(row_id: int):
 def delete_inventario_id(row_id: int):
     soft_delete_row("inventario", int(row_id))
 
-def update_venta_fields(row_id: int, payload: dict):
+def update_venta_fields(row_id: int, **payload):
     # Normaliza numéricos si llegan como "3.000,00"
     if "venta" in payload:    payload["venta"]    = _to_float(payload["venta"])
     if "costo" in payload:    payload["costo"]    = _to_float(payload["costo"])
@@ -1994,7 +1994,7 @@ def update_venta_fields(row_id: int, payload: dict):
     audit("update", table_name="transacciones", row_id=row_id, after=payload)
 
 
-def update_gasto_fields(row_id: int, payload: dict):
+def update_gasto_fields(row_id: int, **payload):
     if "valor" in payload:
         payload["valor"] = _to_float(payload["valor"])
 
@@ -2002,7 +2002,7 @@ def update_gasto_fields(row_id: int, payload: dict):
     audit("update", table_name="gastos", row_id=row_id, after=payload)
 
 
-def update_prestamo_fields(row_id: int, payload: dict):
+def update_prestamo_fields(row_id: int, **payload):
     if "valor" in payload:
         payload["valor"] = _to_float(payload["valor"])
 
@@ -2011,7 +2011,7 @@ def update_prestamo_fields(row_id: int, payload: dict):
 
 
 
-def update_inventario_fields(row_id: int, payload: dict):
+def update_inventario_fields(row_id: int, **payload):
     if "valor_costo" in payload:
         payload["valor_costo"] = _to_float(payload["valor_costo"])
 
