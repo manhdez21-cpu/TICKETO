@@ -2869,6 +2869,121 @@ def import_excel_all(xls_file, replace: bool = False) -> dict:
     audit("import.xlsx", table_name="*", extra={"filename": fname, "replace": bool(replace), "stats": stats})
     return stats
 
+
+def _insert_many(table: str, df: pd.DataFrame) -> int:
+    """
+    Inserta filas normalizadas en la tabla indicada usando las funciones de inserción de alto nivel.
+    Devuelve el número de filas insertadas con éxito.
+    - Valida el nombre de tabla contra una lista blanca
+    - Continúa aunque alguna fila falle (audita los errores)
+    """
+    if df is None or df.empty:
+        return 0
+
+    # Mapa de funciones y whitelist
+    insert_map = {
+        "transacciones": insert_venta,
+        "gastos":        insert_gasto,
+        "prestamos":     insert_prestamo,
+        "inventario":    insert_inventario,
+        "deudores_ini":  insert_deudor_ini,
+    }
+    if table not in insert_map:
+        raise ValueError(f"Tabla no soportada en _insert_many: {table}")
+
+    fn = insert_map[table]
+    ok = 0
+    for idx, row in df.iterrows():
+        try:
+            fn(row.to_dict())
+            ok += 1
+        except Exception as e:
+            # Auditoría por fila fallida, pero no detenemos la importación
+            audit("import.row_error", table_name=table, row_id=None, extra={
+                "row_index": int(idx),
+                "error": str(e),
+            })
+            continue
+    return ok
+
+def import_excel_all(xls_file, replace: bool = False) -> dict:
+    """
+    Importación TODO-EN-UNO desde Excel:
+      - Hojas: Ventas, Gastos, Prestamos, Inventario
+      - DeudoresIniciales desde hoja 'Consolidado' (cols E/F)
+    • Si replace=True, limpia primero (solo tablas permitidas)
+    • Devuelve stats con conteos y errores por hoja
+    """
+    stats = {"ventas": 0, "gastos": 0, "prestamos": 0, "inventario": 0, "deudores_ini": 0}
+    errors: dict[str, str] = {}
+
+    if replace:
+        # Solo tablas de negocio involucradas en esta importación
+        _truncate_tables(["transacciones", "gastos", "prestamos", "inventario", "deudores_ini"])
+
+    # Abrimos el Excel con context manager (cierra siempre)
+    try:
+        with pd.ExcelFile(xls_file) as xls:
+            # --- Ventas ---
+            try:
+                v_raw = pd.read_excel(xls, sheet_name="Ventas")
+                v = normalize_ventas(v_raw)
+                stats["ventas"] = _insert_many("transacciones", v)
+            except Exception as e:
+                errors["ventas"] = str(e)
+
+            # --- Gastos ---
+            try:
+                g_raw = pd.read_excel(xls, sheet_name="Gastos")
+                g = normalize_gastos(g_raw)
+                stats["gastos"] = _insert_many("gastos", g)
+            except Exception as e:
+                errors["gastos"] = str(e)
+
+            # --- Prestamos ---
+            try:
+                p_raw = pd.read_excel(xls, sheet_name="Prestamos")
+                p = normalize_prestamos(p_raw)
+                stats["prestamos"] = _insert_many("prestamos", p)
+            except Exception as e:
+                errors["prestamos"] = str(e)
+
+            # --- Inventario ---
+            try:
+                i_raw = pd.read_excel(xls, sheet_name="Inventario")
+                i = normalize_inventario(i_raw)
+                stats["inventario"] = _insert_many("inventario", i)
+            except Exception as e:
+                errors["inventario"] = str(e)
+
+            # --- DeudoresIniciales (desde Consolidado) ---
+            try:
+                ddf = extract_deudores_ini_from_xls(xls, "Consolidado")
+                stats["deudores_ini"] = _insert_many("deudores_ini", ddf)
+            except Exception as e:
+                errors["deudores_ini"] = str(e)
+
+    except Exception as e:
+        # Error global al abrir/leer el archivo
+        audit("import.xlsx.error", table_name="*", extra={"filename": getattr(xls_file, "name", None), "error": str(e)})
+        raise
+
+    # Auditoría final con detalle
+    try:
+        fname = getattr(xls_file, "name", None)
+    except Exception:
+        fname = None
+
+    audit("import.xlsx",
+          table_name="*",
+          extra={"filename": fname, "replace": bool(replace), "stats": stats, "errors": errors})
+
+    # Para el caller es útil ver errores también
+    result = dict(stats)
+    if errors:
+        result["errors"] = errors
+    return result
+
 import unicodedata
 
 def _slug_user(u: str) -> str:
@@ -2977,35 +3092,57 @@ def backup_user_flush_audit(username: str) -> int:
     if not GOOGLE_SHEETS_ENABLED:
         return 0
 
-    sh, slug = _gs_open_or_create_user_book(username)   # ← 2 valores
-    sheet_name = f"{slug}::Cambios"                     # ← usa prefijo siempre (evita choques en fallback)
-    ws = _ws(sh, sheet_name, rows=1000, cols=6)
+    # Abre/crea el spreadsheet personal del usuario y la worksheet de cambios
+    sh, slug = _gs_open_or_create_user_book(username)
+    sheet_name = f"{slug}::Cambios"   # prefijo estable para evitar choques en fallback
+    ws = _ws(sh, sheet_name, rows=1000, cols=7)  # ← 7 columnas (id..details)
 
+    # Último id enviado con éxito
     last_id = int(get_meta(_meta_key_last_audit(slug), 0) or 0)
+
+    # Trae cambios nuevos de auditoría (orden ASC para mantener incrementalidad)
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, ts, user, action, table_name, row_id, details "
-            "FROM audit_log WHERE user=? AND id>? ORDER BY id ASC",
-            (username, last_id)
-        ).fetchall()
+        # "user" es palabra reservada en PG; cítala con comillas dobles
+        q = text("""
+            SELECT id, ts, "user", action, table_name, row_id, details
+            FROM audit_log
+            WHERE "user" = :u AND id > :last
+            ORDER BY id ASC
+        """)
+        rows = conn.execute(q, {"u": username, "last": last_id}).fetchall()
+
     if not rows:
         return 0
 
+    # Si la hoja está vacía, escribe encabezado
     try:
         size = len(ws.get_all_values() or [])
     except Exception:
         size = 0
-
-    payload = []
     if size == 0:
-        payload.append(["id","ts","user","action","table","row_id","details"])
-    for r in rows:
-        payload.append([r[0], r[1], r[2], r[3], r[4], r[5], str(r[6] or "")])
+        ws.update([["id","ts","user","action","table","row_id","details"]], value_input_option="RAW")
 
-    ws.append_rows(payload, value_input_option="RAW")
-    set_meta(_meta_key_last_audit(slug), int(rows[-1][0]))
-    audit("user.backup.flush_audit", extra={"user": username, "pushed": len(rows)})
-    return len(rows)
+    # Prepara payload (lista de listas). Fuerza strings seguros.
+    payload = [
+        [int(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5]), str(r[6] or "")]
+        for r in rows
+    ]
+
+    # Apéndice por lotes para respetar cuotas/tiempos de Sheets
+    CHUNK = 500
+    pushed = 0
+    last_pushed_id = last_id
+    for i in range(0, len(payload), CHUNK):
+        batch = payload[i:i+CHUNK]
+        ws.append_rows(batch, value_input_option="RAW")
+        pushed += len(batch)
+        # Id realmente confirmado hasta aquí
+        last_pushed_id = int(rows[i + len(batch) - 1][0])
+
+    # Persiste el último id confirmado y audita
+    set_meta(_meta_key_last_audit(slug), last_pushed_id)
+    audit("user.backup.flush_audit", extra={"user": username, "pushed": pushed})
+    return pushed
 
 # =========================================================
 # Sidebar (login primero)
@@ -3912,58 +4049,79 @@ def show(section: str) -> bool:
 # Diario consolidado
 # ---------------------------------------------------------
 if show("🧮 Diario Consolidado"):
-    v_df = read_ventas(); g_df = read_gastos(); p_df = read_prestamos(); i_df = read_inventario()
+    # Lee dataframes (suponiendo que ya filtran eliminados lógicamente)
+    v_df = read_ventas()
+    g_df = read_gastos()
+    p_df = read_prestamos()
+    i_df = read_inventario()
 
-    total_cuenta    = float(v_df.loc[v_df['observacion'].eq('CUENTA'),   'venta'].sum()) if not v_df.empty else 0.0
-    total_efectivo  = float(v_df.loc[v_df['observacion'].eq('EFECTIVO'), 'venta'].sum()) if not v_df.empty else 0.0
-    total_gastos    = float(g_df['valor'].sum()) if not g_df.empty else 0.0
-    total_costos    = float(v_df['costo'].sum()) if not v_df.empty else 0.0
-    total_prestamos = float(p_df['valor'].sum()) if not p_df.empty else 0.0
-    total_inventario= float(i_df['valor_costo'].sum()) if not i_df.empty else 0.0
+    # Coerción segura a numérico (evita problemas si hay strings/NaN)
+    if not v_df.empty:
+        for col in ("costo", "venta", "ganancia"):
+            if col in v_df.columns:
+                v_df[col] = pd.to_numeric(v_df[col], errors="coerce").fillna(0.0)
+    if not g_df.empty and "valor" in g_df.columns:
+        g_df["valor"] = pd.to_numeric(g_df["valor"], errors="coerce").fillna(0.0)
+    if not p_df.empty and "valor" in p_df.columns:
+        p_df["valor"] = pd.to_numeric(p_df["valor"], errors="coerce").fillna(0.0)
+    if not i_df.empty and "valor_costo" in i_df.columns:
+        i_df["valor_costo"] = pd.to_numeric(i_df["valor_costo"], errors="coerce").fillna(0.0)
 
+    # Totales
+    total_cuenta     = float(v_df.loc[v_df["observacion"].eq("CUENTA"),   "venta"].sum()) if not v_df.empty else 0.0
+    total_efectivo   = float(v_df.loc[v_df["observacion"].eq("EFECTIVO"), "venta"].sum()) if not v_df.empty else 0.0
+    total_gastos     = float(g_df["valor"].sum()) if not g_df.empty else 0.0
+    total_costos     = float(v_df["costo"].sum()) if not v_df.empty else 0.0
+    total_prestamos  = float(p_df["valor"].sum()) if not p_df.empty else 0.0
+    total_inventario = float(i_df["valor_costo"].sum()) if not i_df.empty else 0.0
+    total_ventas     = float(total_cuenta + total_efectivo)
+    total_ganancia   = float(v_df["ganancia"].sum()) if not v_df.empty else 0.0
+
+    # Deudores iniciales
     d_ini = read_deudores_ini()
-    total_deudores_ini = float(d_ini['valor'].sum()) if not d_ini.empty else 0.0
+    total_deudores_ini = float(pd.to_numeric(d_ini["valor"], errors="coerce").fillna(0.0).sum()) if not d_ini.empty else 0.0
 
-    _, total_deu = deudores_sin_corte()
-    total_ventas  = float(total_cuenta + total_efectivo)
-    total_ganancia= float(v_df['ganancia'].sum()) if not v_df.empty else 0.0
-
-    # ---- necesarios para este bloque ----
-    # Deudores “totales” (se muestran aunque sea 0)
+    # Deudores “vivos” (solo una llamada)
     _, total_deu = deudores_sin_corte()
 
     # Efectivo global actual y métrica superior
     efectivo_ini, _ = get_efectivo_global_now()
     metric_box = st.empty()
     metric_box.metric("EFECTIVO", money(efectivo_ini))
-    # -------------------------------------
 
     # === Tarjetas alineadas (no ocultar ceros) ===
     items = [
-        {"title": "Total ventas",     "value": total_ventas,     "fmt": money},
-        {"title": "Gastos totales",   "value": total_gastos,     "fmt": money},
-        {"title": "Costos totales",   "value": total_costos,     "fmt": money},
-        {"title": "Total préstamos",  "value": total_prestamos,  "fmt": money},
-        {"title": "Inventario total", "value": total_inventario, "fmt": money},  # 👈 ya lo tenías
-        {"title": "Deudores totales", "value": total_deu,        "fmt": money},  # 👈 NUEVO
+        {"title": "Total ventas",      "value": total_ventas,     "fmt": money},
+        {"title": "Gastos totales",    "value": total_gastos,     "fmt": money},
+        {"title": "Costos totales",    "value": total_costos,     "fmt": money},
+        {"title": "Ganancia total",    "value": total_ganancia,   "fmt": money},  # ← ahora se usa
+        {"title": "Total préstamos",   "value": total_prestamos,  "fmt": money},
+        {"title": "Inventario total",  "value": total_inventario, "fmt": money},
+        {"title": "Deudores totales",  "value": total_deu,        "fmt": money},
     ]
-    render_stat_cards(items, hide_empty=True, hide_zero=False)  # 👈 no ocultes 0
+    render_stat_cards(items, hide_empty=True, hide_zero=False)
 
     # Layout 2:1 (solo usamos la izquierda; derecha queda vacía)
     colL, _ = st.columns([2, 1], gap="small")
 
     with colL:
-        CONS_efectivo = currency_input("Efectivo en caja", key="CONS_efectivo_input",
-                                    value=float(efectivo_ini))
-        if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True,
-                    key="CONS_efectivo_save"):
+        CONS_efectivo = currency_input(
+            "Efectivo en caja",
+            key="CONS_efectivo_input",
+            value=float(efectivo_ini)
+        )
+        if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True, key="CONS_efectivo_save"):
             # Reemplazo automático: primero borro, luego inserto/actualizo
             delete_consolidado("GLOBAL")
             upsert_consolidado("GLOBAL", float(CONS_efectivo), "")
 
+            # Refresca la métrica de efectivo
             nuevo_ef, _ = get_efectivo_global_now()
             metric_box.metric("EFECTIVO", money(nuevo_ef))
-            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
+            components.html(
+                "<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>",
+                height=0, width=0
+            )
             finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
 
     # ===== Total de capital (minimal) =====
@@ -3971,8 +4129,8 @@ if show("🧮 Diario Consolidado"):
     st.markdown(
         f'''
         <div class="mm-card">
-        <h4>Total de capital</h4>
-        <div class="mm-total">{money(total_capital)}</div>
+            <h4>Total de capital</h4>
+            <div class="mm-total">{money(total_capital)}</div>
         </div>
         ''',
         unsafe_allow_html=True
@@ -3982,8 +4140,15 @@ if show("🧮 Diario Consolidado"):
 # Ventas
 # ---------------------------------------------------------
 elif show("🧾 Ventas"):
+    # -------- Alta de venta --------
     f1c1, f1c2 = st.columns(2, gap="small")
-    VTA_fecha = f1c1.date_input("Fecha", value=date.today(), max_value=date.today(), key="VTA_fecha_rt", format="DD/MM/YYYY")
+    VTA_fecha = f1c1.date_input(
+        "Fecha",
+        value=date.today(),
+        max_value=date.today(),
+        key="VTA_fecha_rt",
+        format="DD/MM/YYYY"
+    )
     VTA_cliente = f1c2.text_input("Cliente", key="VTA_cliente_rt")
 
     f2c1, f2c2, f2c3 = st.columns(3, gap="small")
@@ -3992,7 +4157,7 @@ elif show("🧾 Ventas"):
     with f2c2:
         VTA_venta = currency_input("Venta", key="VTA_venta_rt", value=0.0)
     with f2c3:
-        VTA_gan_calc = max(0.0, float(VTA_venta - VTA_costo))
+        VTA_gan_calc = max(0.0, float(VTA_venta) - float(VTA_costo))
         st.text_input("Ganancia", value=money(VTA_gan_calc), disabled=True, key="VTA_ganancia_view_rt")
 
     f3c1, f3c2 = st.columns(2, gap="small")
@@ -4012,32 +4177,30 @@ elif show("🧾 Ventas"):
     if float(VTA_venta) < float(VTA_costo):
         st.warning("La venta es menor que el costo. ¿Seguro?")
 
-    obs_val = "CUENTA" if VTA_debe else "EFECTIVO"
-
     # Guardar
     if st.button("💾 Guardar venta", type="primary", key="VTA_submit_rt", disabled=invalid_paga):
-    # ✅ Validaciones anti-vacío
+        # ✅ Validaciones anti-vacío
         if not str(VTA_cliente).strip():
             st.warning("Escribe el nombre del cliente.")
         elif float(VTA_venta) <= 0:
             st.warning("La venta debe ser mayor que 0.")
         else:
             insert_venta({
-                'fecha': str(VTA_fecha),
-                'cliente_nombre': VTA_cliente,
-                'costo': float(VTA_costo),
-                'venta': float(VTA_venta),
-                'ganancia': float(VTA_gan_calc),
-                'debe_flag': 1 if VTA_debe else 0,
-                'paga': 'X' if VTA_paga else '',
-                'abono1': float(VTA_ab1),
-                'abono2': float(VTA_ab2),
-                'observacion': "CUENTA" if VTA_debe else "EFECTIVO",
+                "fecha": str(VTA_fecha),
+                "cliente_nombre": str(VTA_cliente).strip(),
+                "costo": float(VTA_costo),
+                "venta": float(VTA_venta),
+                "ganancia": float(VTA_gan_calc),
+                "debe_flag": 1 if VTA_debe else 0,
+                "paga": "X" if VTA_paga else "",
+                "abono1": float(VTA_ab1),
+                "abono2": float(VTA_ab2),
+                "observacion": ("CUENTA" if VTA_debe else "EFECTIVO"),
             })
 
-            # 🔄 limpiar y refrescar como ya lo hacías
+            # 🔄 limpiar y refrescar
             _reset_keys([
-                "VTA_fecha_rt","VTA_cliente_rt","VTA_debe_rt","VTA_paga_rt","VTA_obs_rt",
+                "VTA_fecha_rt","VTA_cliente_rt","VTA_debe_rt","VTA_paga_rt",
                 "VTA_costo_rt_txt","VTA_venta_rt_txt","VTA_ab1_rt_txt","VTA_ab2_rt_txt",
                 "VTA_ganancia_view_rt"
             ])
@@ -4047,7 +4210,7 @@ elif show("🧾 Ventas"):
 
     st.divider()
 
-    # ===== Listado (CON acciones por fila) =====
+    # -------- Listado + acciones por fila --------
     v = read_ventas()
     if not v.empty:
         # Precargar último estado de filtros (opcional)
@@ -4076,14 +4239,15 @@ elif show("🧾 Ventas"):
 
         # Métricas (solo registros con observación válida)
         v_num = v.copy()
-        for col in ['costo','venta','ganancia','abono1','abono2']:
-            v_num[col] = pd.to_numeric(v_num[col], errors='coerce').fillna(0.0)
-        mask_obs = v_num['observacion'].fillna('').str.strip().ne('')
+        for col in ["costo","venta","ganancia","abono1","abono2"]:
+            if col in v_num.columns:
+                v_num[col] = pd.to_numeric(v_num[col], errors="coerce").fillna(0.0)
+        mask_obs = v_num["observacion"].fillna("").str.strip().ne("")
         v_valid = v_num[mask_obs]
         m1, m2, m3 = st.columns(3, gap="small")
-        m1.metric("Costos totales",  money(float(v_valid['costo'].sum())))
-        m2.metric("Ventas totales",  money(float(v_valid['venta'].sum())))
-        m3.metric("Ganancia total",  money(float(v_valid['ganancia'].sum())))
+        m1.metric("Costos totales",  money(float(v_valid["costo"].sum())) if "costo" in v_valid else money(0))
+        m2.metric("Ventas totales",  money(float(v_valid["venta"].sum())) if "venta" in v_valid else money(0))
+        m3.metric("Ganancia total",  money(float(v_valid["ganancia"].sum())) if "ganancia" in v_valid else money(0))
 
         # Paginación
         v = v.sort_values(["fecha","id"], ascending=[False, False]).reset_index(drop=True)
@@ -4096,10 +4260,11 @@ elif show("🧾 Ventas"):
         v_page = v.iloc[start:stop].copy()
 
         # Tabla visual rápida (sin acciones) de la página actual
-        cols_show = ['fecha','cliente_nombre','observacion','costo','venta','ganancia','debe_flag','paga','abono1','abono2']
+        cols_show = ["fecha","cliente_nombre","observacion","costo","venta","ganancia","debe_flag","paga","abono1","abono2"]
         v_show = v_page[cols_show].copy()
-        v_show['debe_flag'] = v_show['debe_flag'].fillna(0).astype(int).map({1: "SÍ", 0: "NO"})
-        v_show = df_format_money(v_show, ['costo','venta','ganancia','abono1','abono2'])
+        if "debe_flag" in v_show:
+            v_show["debe_flag"] = v_show["debe_flag"].fillna(0).astype(int).map({1: "SÍ", 0: "NO"})
+        v_show = df_format_money(v_show, ["costo","venta","ganancia","abono1","abono2"])
         st.dataframe(v_show, use_container_width=True)
 
         st.markdown("#### Acciones por venta")
@@ -4122,13 +4287,16 @@ elif show("🧾 Ventas"):
                     f = pd.to_datetime(r["fecha"], errors="coerce").date()
                     st.write(f.strftime("%d/%m/%Y") if pd.notna(f) else "")
                 except Exception:
-                    st.write(str(r["fecha"] or ""))
-            with c2: st.write(str(r.get("cliente_nombre","")).strip())
-            with c3: st.write(str(r.get("observacion","")).strip())
-            with c4: st.write(money(_to_float(r.get("venta",0))))
+                    st.write(str(r.get("fecha") or ""))
+            with c2:
+                st.write(str(r.get("cliente_nombre","")).strip())
+            with c3:
+                st.write(str(r.get("observacion","")).strip())
+            with c4:
+                st.write(money(_to_float(r.get("venta",0))))
 
             with c5:
-                a1, a2 = st.columns([1,1], gap="small")  # ← un solo nivel de columnas
+                a1, a2 = st.columns([1,1], gap="small")
 
                 # ========== EDITAR ==========
                 with a1:
@@ -4155,7 +4323,7 @@ elif show("🧾 Ventas"):
                             debe_i    = st.checkbox("DEBE", value=_debeB, key=f"e_debe_{rid}")
                             paga_i    = st.checkbox("PAGA (pagó hoy)", value=_pagaB, key=f"e_paga_{rid}")
                             obs_i     = st.selectbox("Observación", ["EFECTIVO","CUENTA"],
-                                                    index=(1 if _obs=="CUENTA" else 0), key=f"e_obs_{rid}")
+                                                     index=(1 if _obs=="CUENTA" else 0), key=f"e_obs_{rid}")
 
                             gan_calc  = max(0.0, float(venta_i) - float(costo_i))
                             st.caption(f"Ganancia sugerida: {money(gan_calc)}")
@@ -4190,22 +4358,22 @@ elif show("🧾 Ventas"):
     else:
         st.info("No hay ventas registradas aún.")
 
-
-
-# ====== Editor en bloque (abonos / PAGA) ======
-# Base para edición masiva: solo columnas necesarias + bandera PAGA booleana
-        vv_editor = v[['id','fecha','cliente_nombre','venta','abono1','abono2','paga']].copy()
-        vv_editor['paga'] = vv_editor['paga'].fillna('')
-        vv_editor['PAGA'] = vv_editor['paga'].astype(str).str.strip().str.upper().eq('X')
-        vv_editor.drop(columns=['paga'], inplace=True)
-        vv_editor['🗑️ Eliminar'] = False
+    # ====== Editor en bloque (abonos / PAGA) ======
+    # Solo si hay datos
+    if not v.empty:
+        # Base para edición masiva: solo columnas necesarias + bandera PAGA booleana
+        vv_editor = v[["id","fecha","cliente_nombre","venta","abono1","abono2","paga"]].copy()
+        vv_editor["paga"] = vv_editor["paga"].fillna("")
+        vv_editor["PAGA"] = vv_editor["paga"].astype(str).str.strip().str.upper().eq("X")
+        vv_editor.drop(columns=["paga"], inplace=True)
+        vv_editor["🗑️ Eliminar"] = False
 
         # Alinear índices con lo que devuelve data_editor (posición 0..n-1)
         vv_editor = vv_editor.reset_index(drop=True)
 
         edited = st.data_editor(
             vv_editor,
-            key='ventas_editor',
+            key="ventas_editor",
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
@@ -4223,11 +4391,12 @@ elif show("🧾 Ventas"):
 
         # --- Barra CTA pegajosa cuando hay cambios en el editor ---
         state_ventas_editor = st.session_state.get("ventas_editor", {})
-        edited_rows = (getattr(state_ventas_editor, "edited_rows", None) 
-                    or state_ventas_editor.get("edited_rows", {}))
+        edited_rows = (getattr(state_ventas_editor, "edited_rows", None) or state_ventas_editor.get("edited_rows", {}))
 
-        # Marcados para eliminar (si usas la columna "🗑️ Eliminar")
-        to_delete_positions = edited.index[edited.get('🗑️ Eliminar', False) == True].tolist() if '🗑️ Eliminar' in edited.columns else []
+        # Marcados para eliminar (robusto)
+        to_delete_positions = []
+        if isinstance(edited, pd.DataFrame) and ("🗑️ Eliminar" in edited.columns):
+            to_delete_positions = edited.index[edited["🗑️ Eliminar"] == True].tolist()
 
         # ¿Hay algo que guardar?
         hay_cambios = bool(edited_rows or to_delete_positions)
@@ -4235,30 +4404,33 @@ elif show("🧾 Ventas"):
         if hay_cambios:
             with st.container():
                 st.markdown('<div class="tt-sticky-cta">', unsafe_allow_html=True)
-                bL, bR = st.columns([1,1],gap="small")
-                # Guardar (usa la misma lógica que tu botón existente)
+                bL, bR = st.columns([1,1], gap="small")
+
+                # Guardar (usa la misma lógica que el botón existente)
                 if bL.button("💾 Guardar cambios (arriba)", type="primary", key="VENTAS_save_sticky"):
                     n_upd = 0
                     for pos, changes in (edited_rows or {}).items():
-                        row_id = int(vv_editor.iloc[int(pos)]['id'])
+                        row_id = int(vv_editor.iloc[int(pos)]["id"])
                         payload = {}
-                        if 'abono1' in changes: payload['abono1'] = _nz(changes['abono1'])
-                        if 'abono2' in changes: payload['abono2'] = _nz(changes['abono2'])
-                        if 'PAGA'   in changes: payload['paga']   = 'X' if bool(changes['PAGA']) else ''
+                        if "abono1" in changes: payload["abono1"] = _nz(changes["abono1"])
+                        if "abono2" in changes: payload["abono2"] = _nz(changes["abono2"])
+                        if "PAGA"   in changes: payload["paga"]   = "X" if bool(changes["PAGA"]) else ""
                         if payload:
-                            update_venta_fields(row_id, **payload); n_upd += 1
+                            update_venta_fields(row_id, **payload)
+                            n_upd += 1
+
                     for pos in to_delete_positions:
-                        rid = int(vv_editor.iloc[int(pos)]['id'])
+                        rid = int(vv_editor.iloc[int(pos)]["id"])
                         delete_venta_id(rid)
+
                     finish_and_refresh(f"Ventas actualizadas: {n_upd}", ["transacciones"])
 
                 # Cancelar → limpia los edits del data_editor y recarga
                 if bR.button("Cancelar edición", key="VENTAS_cancel_sticky"):
-                    # vacía los cambios del editor
-                    st.session_state['ventas_editor'] = {}
+                    st.session_state["ventas_editor"] = {}
                     st.rerun()
 
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
         cE, cD = st.columns(2, gap="small")
 
@@ -4287,18 +4459,13 @@ elif show("🧾 Ventas"):
 # Gastos
 # ---------------------------------------------------------
 elif show("💸 Gastos"):
-    # --- Predeclaraciones para Pylance (evita reportUndefinedVariable) ---
-    GTO_fecha: date | None = date.today()
-    GTO_conc: str = ""
-    GTO_valor: float = 0.0
-    GTO_notas: str = ""
-
+    # -------- Alta de gasto --------
     with st.form(key="GTO_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
         GTO_fecha = c1.date_input(
             "Fecha",
             value=date.today(),
-            max_value=date.today(),              # bloquea fechas futuras
+            max_value=date.today(),  # bloquea fechas futuras
             key="GTO_fecha",
             format="DD/MM/YYYY"
         )
@@ -4310,20 +4477,20 @@ elif show("💸 Gastos"):
         with c4:
             GTO_notas = st.text_input("Notas", value="", key="GTO_notas")
 
-        GTO_submit = st.form_submit_button("💾 Guardar gasto")
+        GTO_submit = st.form_submit_button("💾 Guardar gasto", use_container_width=True)
 
     if GTO_submit and GTO_fecha is not None:
-    # ✅ Validaciones anti-vacío
+        # ✅ Validaciones anti-vacío
         if not str(GTO_conc).strip():
             st.warning("El concepto es obligatorio.")
         elif float(GTO_valor) <= 0:
             st.warning("El valor debe ser mayor que 0.")
         else:
             insert_gasto({
-                'fecha': str(GTO_fecha),
-                'concepto': GTO_conc,
-                'valor': float(GTO_valor),
-                'notas': GTO_notas
+                "fecha": str(GTO_fecha),
+                "concepto": str(GTO_conc).strip(),
+                "valor": float(GTO_valor),
+                "notas": str(GTO_notas or "").strip()
             })
             components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
             clear_gasto_form()
@@ -4331,7 +4498,7 @@ elif show("💸 Gastos"):
 
     st.divider()
 
-    # ===== A PARTIR DE AQUÍ TODO QUEDA DENTRO DEL ELIF =====
+    # -------- Listado / filtros / métricas --------
     g = read_gastos()
     if not g.empty:
         # Precargar último estado de filtros (opcional)
@@ -4345,6 +4512,10 @@ elif show("💸 Gastos"):
         st.session_state["gastos_last_text"]  = st.session_state.get("q_gastos", "")
         st.session_state["gastos_last_rango"] = st.session_state.get("rng_gastos", None)
 
+        # Asegurar numérico para métricas
+        if "valor" in g.columns:
+            g["valor"] = pd.to_numeric(g["valor"], errors="coerce").fillna(0.0)
+
         # Export CSV del resultado filtrado
         st.download_button(
             "⬇️ Exportar CSV (gastos filtrados)",
@@ -4355,19 +4526,19 @@ elif show("💸 Gastos"):
         )
 
         # Métrica + tabla
-        st.metric("TOTAL GASTOS", money(float(g['valor'].sum())))
-        g_show = g.sort_values('fecha', ascending=False).copy()
-        g_show = df_format_money(g_show, ['valor'])
+        st.metric("TOTAL GASTOS", money(float(g["valor"].sum())) if "valor" in g.columns else money(0))
+        g_show = g.sort_values("fecha", ascending=False).copy()
+        g_show = df_format_money(g_show, ["valor"])
         st.dataframe(g_show, use_container_width=True)
 
-        # === GASTOS: edición/borrado en línea ===
-        gg = g.sort_values('fecha', ascending=False).copy()
-        g_editor = gg[['id','fecha','concepto','valor','notas']].copy()
-        g_editor['🗑️ Eliminar'] = False
+        # -------- Editor en línea (update / soft delete) --------
+        gg = g.sort_values("fecha", ascending=False).copy()
+        g_editor = gg[["id","fecha","concepto","valor","notas"]].copy().reset_index(drop=True)
+        g_editor["🗑️ Eliminar"] = False
 
         edited_g = st.data_editor(
             g_editor,
-            key='gastos_editor',
+            key="gastos_editor",
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
@@ -4383,33 +4554,47 @@ elif show("💸 Gastos"):
 
         cg1, cg2 = st.columns(2, gap="small")
 
+        # Guardar cambios en línea
         if cg1.button("💾 Guardar cambios", type="primary", key="GTO_inline_save"):
             n_upd = 0
             for i, row in edited_g.iterrows():
-                row_id = int(g_editor.loc[i, 'id'])
+                row_id = int(g_editor.iloc[i]["id"])
+                # Normaliza entradas
+                new_conc  = str(row.get("concepto","")).strip()
+                new_valor = float(row.get("valor") or 0.0)
+                new_notas = str(row.get("notas","")).strip()
+
+                old_conc  = str(g_editor.iloc[i]["concepto"]).strip()
+                old_valor = float(g_editor.iloc[i]["valor"] or 0.0)
+                old_notas = str(g_editor.iloc[i]["notas"] or "").strip()
+
                 changes = {}
-                if str(row['concepto']).strip() != str(g_editor.loc[i,'concepto']).strip():
-                    changes['concepto'] = row['concepto']
-                if float(row['valor']) != float(g_editor.loc[i,'valor']):
-                    changes['valor'] = float(row['valor'])
-                if str(row['notas']).strip() != str(g_editor.loc[i,'notas']).strip():
-                    changes['notas'] = row['notas']
+                if new_conc != old_conc:
+                    changes["concepto"] = new_conc
+                if new_valor != old_valor:
+                    changes["valor"] = new_valor
+                if new_notas != old_notas:
+                    changes["notas"] = new_notas
+
                 if changes:
                     update_gasto_fields(row_id, **changes)
                     n_upd += 1
+
             finish_and_refresh(f"Gastos actualizados: {n_upd}", ["gastos"])
 
+        # Borrado lógico en bloque
         if cg2.button("🗑️ Eliminar seleccionados", type="primary", key="GTO_inline_del"):
-            idxs = edited_g.index[edited_g['🗑️ Eliminar'] == True].tolist()
-            ids = [int(g_editor.loc[i,'id']) for i in idxs]
+            to_del_pos = edited_g.index[edited_g.get("🗑️ Eliminar", False) == True].tolist() if "🗑️ Eliminar" in edited_g.columns else []
+            ids = [int(g_editor.iloc[pos]["id"]) for pos in to_del_pos]
             if ids:
                 for rid in ids:
                     soft_delete_row("gastos", rid)
                 finish_and_refresh(f"Eliminados {len(ids)} gastos.", ["gastos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
-        ver_eliminados_g = st.session_state.get("GTO_show_del", False)
-        ver_eliminados_g = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="GTO_show_del")            
+
+        # -------- Papelera / restauración --------
+        ver_eliminados_g = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="GTO_show_del")
         if ver_eliminados_g:
             with get_conn() as conn:
                 base = "SELECT id, fecha, concepto, valor, notas FROM gastos WHERE deleted_at IS NOT NULL"
@@ -4421,42 +4606,44 @@ elif show("💸 Gastos"):
                     params = {"o": _current_owner()}
                 g_del = pd.read_sql_query(q, conn, params=params or None)
 
-                if g_del.empty:
-                    st.info("No hay gastos eliminados.")
-                else:
-                    for _, row in g_del.iterrows():
-                        c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
-                        with c_info:
-                            st.markdown(f"**{row['fecha']}** — {row['concepto']} • ${row['valor']:,.0f}")
-                        if c_restore.button("↩️ Restaurar", key=f"restore_g_{int(row['id'])}"):
-                            restore_row("gastos", int(row["id"]))
-                            st.cache_data.clear(); st.rerun()
-                        if is_admin() and c_hard.button("❌ Borrar", key=f"hard_g_{int(row['id'])}"):
-                            hard_delete_row("gastos", int(row["id"]))
-                            st.cache_data.clear(); st.rerun()
+            if g_del.empty:
+                st.info("No hay gastos eliminados.")
+            else:
+                for _, row in g_del.iterrows():
+                    c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                    with c_info:
+                        st.markdown(f"**{row['fecha']}** — {row['concepto']} • ${float(row['valor'] or 0):,.0f}")
+                    if c_restore.button("↩️ Restaurar", key=f"restore_g_{int(row['id'])}"):
+                        restore_row("gastos", int(row["id"]))
+                        st.cache_data.clear(); st.rerun()
+                    if is_admin() and c_hard.button("❌ Borrar", key=f"hard_g_{int(row['id'])}"):
+                        hard_delete_row("gastos", int(row["id"]))
+                        st.cache_data.clear(); st.rerun()
 
 # ---------------------------------------------------------
 # Préstamos
 # ---------------------------------------------------------
 elif show("🤝 Préstamos"):
-    # ---- Alta con form (una sola vez) ----
+    # ---- Alta con form ----
     with st.form("PRE_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
         PRE_nombre = c1.text_input("Nombre", key="PRE_nombre")
-        # IMPORTANTE: in_form=True y etiqueta única para evitar colisiones por aria-label
         with c2:
             PRE_valor = st.number_input("Valor", min_value=0.0, value=0.0, step=100.0, key="PRE_valor")
 
         PRE_submit = st.form_submit_button("💾 Guardar préstamo", use_container_width=True)
 
     if PRE_submit:
-    # ✅ Validaciones anti-vacío
-        if not str(PRE_nombre).strip():
+        # ✅ Validaciones anti-vacío
+        nombre = str(PRE_nombre or "").strip()
+        valor  = float(PRE_valor or 0.0)
+        if not nombre:
             st.warning("El nombre es obligatorio.")
-        elif float(PRE_valor) <= 0:
+        elif valor <= 0:
             st.warning("El valor del préstamo debe ser mayor que 0.")
         else:
-            insert_prestamo({"nombre": PRE_nombre, "valor": float(PRE_valor)})
+            insert_prestamo({"nombre": nombre, "valor": valor})
+            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
             _reset_keys(["PRE_nombre", "PRE_valor", "PRE_valor_txt"])
             finish_and_refresh("Préstamo guardado", ["prestamos"])
 
@@ -4465,19 +4652,16 @@ elif show("🤝 Préstamos"):
     # ---- Listado / edición / borrado ----
     p = read_prestamos()
     if not p.empty:
+        # Orden consistente
+        pp = p.sort_values("id", ascending=False).copy()
 
-        # =========================================================
-        # === PRÉSTAMOS: edición/borrado en línea (editor)      ===
-        # =========================================================
-        pp = p.sort_values('id', ascending=False).copy()
-
-        # Base para el editor (alineada al orden de 'pp')
-        p_editor = pp[['id', 'nombre', 'valor']].copy().reset_index(drop=True)
-        p_editor['🗑️ Eliminar'] = False
+        # Base del editor ALINEADA por índice
+        p_editor = pp[["id", "nombre", "valor"]].copy().reset_index(drop=True)
+        p_editor["🗑️ Eliminar"] = False
 
         edited_p = st.data_editor(
             p_editor,
-            key='prestamos_editor',
+            key="prestamos_editor",
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
@@ -4491,34 +4675,43 @@ elif show("🤝 Préstamos"):
 
         cp1, cp2 = st.columns(2, gap="small")
 
+        # Guardar cambios
         if cp1.button("💾 Guardar cambios", type="primary", key="PRE_inline_save"):
             n_upd = 0
-            # Usa 'pp.iloc[i]' (mismo orden) para comparar con el original
             for i, row in edited_p.iterrows():
-                row_id = int(pp.iloc[i]['id'])
+                row_id = int(p_editor.iloc[i]["id"])
+
+                new_nombre = str(row.get("nombre", "")).strip()
+                new_valor  = float(row.get("valor") or 0.0)
+
+                old_nombre = str(p_editor.iloc[i]["nombre"] or "").strip()
+                old_valor  = float(p_editor.iloc[i]["valor"] or 0.0)
+
                 changes = {}
-                if str(row['nombre']).strip() != str(pp.iloc[i]['nombre']).strip():
-                    changes['nombre'] = row['nombre']
-                if float(row['valor']) != float(_nz(pp.iloc[i]['valor'])):
-                    changes['valor'] = float(row['valor'])
+                if new_nombre != old_nombre:
+                    changes["nombre"] = new_nombre
+                if new_valor != old_valor:
+                    changes["valor"] = new_valor
+
                 if changes:
                     update_prestamo_fields(row_id, **changes)
                     n_upd += 1
+
             finish_and_refresh(f"Préstamos actualizados: {n_upd}", ["prestamos"])
 
+        # Borrado lógico en bloque
         if cp2.button("🗑️ Eliminar seleccionados", type="primary", key="PRE_inline_del"):
-            idxs = edited_p.index[edited_p['🗑️ Eliminar'] == True].tolist()
-            ids = [int(pp.iloc[i]['id']) for i in idxs]
+            to_del_pos = edited_p.index[edited_p.get("🗑️ Eliminar", False) == True].tolist() if "🗑️ Eliminar" in edited_p.columns else []
+            ids = [int(p_editor.iloc[pos]["id"]) for pos in to_del_pos]
             if ids:
                 for rid in ids:
                     soft_delete_row("prestamos", rid)
                 finish_and_refresh(f"Eliminados {len(ids)} préstamos.", ["prestamos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
-            
-        ver_eliminados_p = st.session_state.get("PRE_show_del", False)
-        ver_eliminados_p = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="PRE_show_del")
 
+        # Papelera / restauración
+        ver_eliminados_p = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="PRE_show_del")
         if ver_eliminados_p:
             with get_conn() as conn:
                 base = "SELECT id, nombre, valor FROM prestamos WHERE deleted_at IS NOT NULL"
@@ -4530,22 +4723,21 @@ elif show("🤝 Préstamos"):
                     params = {"o": _current_owner()}
                 p_del = pd.read_sql_query(q, conn, params=params or None)
 
-                if p_del.empty:
-                    st.info("No hay préstamos eliminados.")
-                else:
-                    for _, row in p_del.iterrows():
-                        c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
-                        with c_info:
-                            st.markdown(f"**{row['nombre']}** — ${row['valor']:,.0f}")
-                        if c_restore.button("↩️ Restaurar", key=f"restore_p_{int(row['id'])}"):
-                            restore_row("prestamos", int(row["id"]))
-                            st.cache_data.clear(); st.rerun()
-                        if is_admin() and c_hard.button("❌ Borrar", key=f"hard_p_{int(row['id'])}"):
-                            hard_delete_row("prestamos", int(row["id"]))
-                            st.cache_data.clear(); st.rerun()
+            if p_del.empty:
+                st.info("No hay préstamos eliminados.")
+            else:
+                for _, row in p_del.iterrows():
+                    c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                    with c_info:
+                        st.markdown(f"**{row['nombre']}** — ${float(row['valor'] or 0):,.0f}")
+                    if c_restore.button("↩️ Restaurar", key=f"restore_p_{int(row['id'])}"):
+                        restore_row("prestamos", int(row["id"]))
+                        st.cache_data.clear(); st.rerun()
+                    if is_admin() and c_hard.button("❌ Borrar", key=f"hard_p_{int(row['id'])}"):
+                        hard_delete_row("prestamos", int(row["id"]))
+                        st.cache_data.clear(); st.rerun()
 
         st.divider()
-
     else:
         st.info("No hay préstamos registrados.")
 
@@ -4553,39 +4745,51 @@ elif show("🤝 Préstamos"):
 # Inventario
 # ---------------------------------------------------------
 elif show("📦 Inventario"):
-    with st.form(key="INV_form",clear_on_submit=True):
+    # ---- Alta con form ----
+    with st.form(key="INV_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
         INV_prod  = c1.text_input("Producto", key="INV_producto")
         with c2:
             INV_costo = st.number_input("Valor costo", min_value=0.0, value=0.0, step=100.0, key="INV_valor_costo")
-        INV_submit = st.form_submit_button("💾 Guardar ítem")
+        INV_submit = st.form_submit_button("💾 Guardar ítem", use_container_width=True)
+
     if INV_submit:
-    # ✅ Validaciones anti-vacío
-        if not str(INV_prod).strip():
+        # ✅ Validaciones anti-vacío
+        prod  = str(INV_prod or "").strip()
+        costo = float(INV_costo or 0.0)
+        if not prod:
             st.warning("El nombre del producto es obligatorio.")
-        elif float(INV_costo) <= 0:
+        elif costo <= 0:
             st.warning("El valor costo debe ser mayor que 0.")
         else:
-            insert_inventario({'producto': INV_prod, 'valor_costo': float(INV_costo), 'owner': None})
+            insert_inventario({
+                "producto": prod,
+                "valor_costo": costo,
+                "owner": _current_owner(),   # ← si tu insert ya lo infiere, puedes quitar esta línea
+            })
+            components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
             clear_inventario_form()
             finish_and_refresh("Ítem guardado", ["inventario"])
 
     st.divider()
+
+    # ---- Listado / edición / borrado ----
     i = read_inventario()
     if not i.empty:
+        # Orden consistente
+        ii = i.sort_values("id", ascending=False).copy()
 
-    # === INVENTARIO: edición/borrado en línea ===
-        ii = i.sort_values('id', ascending=False).copy()
-        i_editor = ii[['id','producto','valor_costo']].copy()
-        i_editor['🗑️ Eliminar'] = False
+        # Base del editor (alineada por índice con el data_editor)
+        i_editor = ii[["id", "producto", "valor_costo"]].copy().reset_index(drop=True)
+        i_editor["🗑️ Eliminar"] = False
 
         edited_i = st.data_editor(
             i_editor,
-            key='inventario_editor',
+            key="inventario_editor",
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
-            column_order=["producto","valor_costo","🗑️ Eliminar"],
+            column_order=["producto", "valor_costo", "🗑️ Eliminar"],
             column_config={
                 "producto": st.column_config.TextColumn("Producto"),
                 "valor_costo": st.column_config.NumberColumn("Valor costo", format="$ %,d", step=100),
@@ -4595,23 +4799,34 @@ elif show("📦 Inventario"):
 
         ci1, ci2 = st.columns(2, gap="small")
 
+        # Guardar cambios
         if ci1.button("💾 Guardar cambios", type="primary", key="INV_inline_save"):
             n_upd = 0
             for irow, row in edited_i.iterrows():
-                row_id = int(i_editor.loc[irow, 'id'])
+                row_id = int(i_editor.iloc[irow]["id"])
+
+                new_prod  = str(row.get("producto", "")).strip()
+                new_costo = float(row.get("valor_costo") or 0.0)
+
+                old_prod  = str(i_editor.iloc[irow]["producto"] or "").strip()
+                old_costo = float(i_editor.iloc[irow]["valor_costo"] or 0.0)
+
                 changes = {}
-                if str(row['producto']).strip() != str(i_editor.loc[irow,'producto']).strip():
-                    changes['producto'] = row['producto']
-                if float(row['valor_costo']) != float(i_editor.loc[irow,'valor_costo']):
-                    changes['valor_costo'] = float(row['valor_costo'])
+                if new_prod != old_prod:
+                    changes["producto"] = new_prod
+                if new_costo != old_costo:
+                    changes["valor_costo"] = new_costo
+
                 if changes:
                     update_inventario_fields(row_id, **changes)
                     n_upd += 1
+
             finish_and_refresh(f"Inventario actualizado: {n_upd}", ["inventario"])
 
+        # Borrado lógico en bloque
         if ci2.button("🗑️ Eliminar seleccionados", type="primary", key="INV_inline_del"):
-            idxs = edited_i.index[edited_i['🗑️ Eliminar'] == True].tolist()
-            ids = [int(i_editor.loc[i,'id']) for i in idxs]
+            to_del_pos = edited_i.index[edited_i.get("🗑️ Eliminar", False) == True].tolist() if "🗑️ Eliminar" in edited_i.columns else []
+            ids = [int(i_editor.iloc[pos]["id"]) for pos in to_del_pos]
             if ids:
                 for rid in ids:
                     soft_delete_row("inventario", rid)
@@ -4619,9 +4834,8 @@ elif show("📦 Inventario"):
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
 
-        ver_eliminados_i = st.session_state.get("INV_show_del", False)
+        # Papelera / restauración
         ver_eliminados_i = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="INV_show_del")
-
         if ver_eliminados_i:
             with get_conn() as conn:
                 base = "SELECT id, producto, valor_costo FROM inventario WHERE deleted_at IS NOT NULL"
@@ -4633,19 +4847,19 @@ elif show("📦 Inventario"):
                     params = {"o": _current_owner()}
                 i_del = pd.read_sql_query(q, conn, params=params or None)
 
-                if i_del.empty:
-                    st.info("No hay ítems eliminados.")
-                else:
-                    for _, row in i_del.iterrows():
-                        c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
-                        with c_info:
-                            st.markdown(f"**{row['producto']}** — ${row['valor_costo']:,.0f}")
-                        if c_restore.button("↩️ Restaurar", key=f"restore_i_{int(row['id'])}"):
-                            restore_row("inventario", int(row["id"]))
-                            st.cache_data.clear(); st.rerun()
-                        if is_admin() and c_hard.button("❌ Borrar", key=f"hard_i_{int(row['id'])}"):
-                            hard_delete_row("inventario", int(row["id"]))
-                            st.cache_data.clear(); st.rerun()
+            if i_del.empty:
+                st.info("No hay ítems eliminados.")
+            else:
+                for _, row in i_del.iterrows():
+                    c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                    with c_info:
+                        st.markdown(f"**{row['producto']}** — ${float(row['valor_costo'] or 0):,.0f}")
+                    if c_restore.button("↩️ Restaurar", key=f"restore_i_{int(row['id'])}"):
+                        restore_row("inventario", int(row["id"]))
+                        st.cache_data.clear(); st.rerun()
+                    if is_admin() and c_hard.button("❌ Borrar", key=f"hard_i_{int(row['id'])}"):
+                        hard_delete_row("inventario", int(row["id"]))
+                        st.cache_data.clear(); st.rerun()
 
 # ---------------------------------------------------------
 # Deudores
@@ -4653,14 +4867,35 @@ elif show("📦 Inventario"):
 elif show("👤 Deudores"):
     st.markdown("### Deudores")
 
-    df_deu, total_deu = deudores_sin_corte()
-    st.metric("Total por cobrar", money(total_deu))
+    # Trae cartera y total
+    try:
+        df_deu, total_deu = deudores_sin_corte()
+    except Exception as e:
+        st.error(f"No se pudieron calcular los deudores: {e}")
+        df_deu, total_deu = pd.DataFrame(), 0.0
+
+    st.metric("Total por cobrar", money(float(total_deu or 0.0)))
 
     if not df_deu.empty:
+        # Asegura que la(s) columna(s) esperada(s) existan antes de formatear
+        df_view = df_deu.copy()
+        cols_money = [c for c in ["NUEVO", "Pendiente", "Saldo", "total"] if c in df_view.columns]
+        df_view = df_format_money(df_view, cols_money) if cols_money else df_view
+
         st.dataframe(
-            df_format_money(df_deu.copy(), ["NUEVO"]),
+            df_view,
             use_container_width=True,
-            hide_index=True  # si tu versión lo soporta
+            hide_index=True
+        )
+
+        # Exportar CSV de deudores actuales
+        csv_deu = df_deu.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Exportar CSV (deudores)",
+            data=csv_deu,
+            file_name="deudores.csv",
+            mime="text/csv",
+            use_container_width=True
         )
     else:
         st.info("No hay deudores pendientes.")
@@ -4669,130 +4904,170 @@ elif show("👤 Deudores"):
 # Importar/Exportar (Nuevo: todo en uno)
 # ---------------------------------------------------------
 elif show("⬆️ Importar/Exportar"):
+    st.subheader("Importar desde Excel")
+
     up = st.file_uploader("Selecciona tu archivo .xlsx", type=["xlsx"])
     replace = st.checkbox("Reemplazar (vaciar tablas antes de importar)", value=False)
     btn = st.button("Importar ahora", type="primary", disabled=(up is None))
+
     if btn and up is not None:
         try:
+            # Si el buffer ya fue leído por Streamlit en otro paso, garantiza el inicio
+            try:
+                up.seek(0)
+            except Exception:
+                pass
+
             stats = import_excel_all(up, replace=replace)
-            msg = (f"Importado ✔️ — Ventas:{stats.get('ventas',0)} · Gastos:{stats.get('gastos',0)} · "
-                f"Préstamos:{stats.get('prestamos',0)} · Inventario:{stats.get('inventario',0)} · "
-                f"DeudoresIniciales:{stats.get('deudores_ini',0)}")
+
+            # Mensaje resumido y consistente
+            v  = int(stats.get("ventas", 0))
+            g  = int(stats.get("gastos", 0))
+            p  = int(stats.get("prestamos", 0))
+            i  = int(stats.get("inventario", 0))
+            d0 = int(stats.get("deudores_ini", 0))
+            msg = (
+                f"Importado ✔️ • Ventas:{v} · Gastos:{g} · Préstamos:{p} · "
+                f"Inventario:{i} · DeudoresIniciales:{d0}"
+            )
+
             finish_and_refresh(msg, ["transacciones","gastos","prestamos","inventario","deudores_ini"])
         except Exception as e:
             st.error(f"Error importando: {e}")
 
     st.divider()
-    st.markdown("### Exportar a Google Sheets (global)")
+    st.subheader("Exportar a Google Sheets (global)")
 
-    tablas_disponibles = list(GSHEET_MAP.keys())
-    sel = st.multiselect(
-        "Tablas a exportar",
-        options=tablas_disponibles,
-        default=tablas_disponibles,
-        help="Se crean/actualizan hojas con estos nombres en tu Spreadsheet."
-    )
+    if not GOOGLE_SHEETS_ENABLED:
+        st.info("La sincronización con Google Sheets está deshabilitada en Administración.")
+    else:
+        try:
+            tablas_disponibles = list(GSHEET_MAP.keys())
+        except Exception:
+            tablas_disponibles = []
 
-    col_a, col_b = st.columns([1,1], gap="small")
-    with col_a:
-        if st.button("⬆️ Sincronizar ahora", type="primary", disabled=not sel, key="sync_gs"):
-            sync_tables_to_gsheet(sel)
-            finish_and_refresh(f"Sincronizadas: {', '.join(sel)}")
+        if not tablas_disponibles:
+            st.warning("No hay tablas mapeadas para exportar (GSHEET_MAP vacío).")
+        else:
+            sel = st.multiselect(
+                "Tablas a exportar",
+                options=tablas_disponibles,
+                default=tablas_disponibles,
+                help="Se crean/actualizan hojas con estos nombres en tu Spreadsheet."
+            )
 
-    with col_b:
-        sa = st.session_state.get("_gs_sa_email", "—") if GOOGLE_SHEETS_ENABLED else "—"
-        sid = (GSPREADSHEET_ID or "—") if GOOGLE_SHEETS_ENABLED else "—"
-        st.caption(f"Service Account: {sa}")
-        st.caption(f"Sheet ID/URL: {sid}")
-    
-    # === Limpieza rápida (borrado lógico por tipo) ===
-    st.markdown("### Limpieza rápida")
+            col_a, col_b = st.columns([1,1], gap="small")
+            with col_a:
+                do_sync = st.button("⬆️ Sincronizar ahora", type="primary", disabled=not sel, key="sync_gs")
+                if do_sync:
+                    try:
+                        sync_tables_to_gsheet(sel)
+                        finish_and_refresh(f"Sincronizadas: {', '.join(sel)}")
+                    except Exception as e:
+                        st.error(f"No se pudo sincronizar con Google Sheets: {e}")
 
-    def _now_sql():
-        return "NOW()" if DIALECT == "postgres" else "datetime('now')"
-
-    owner = _current_owner()
-    view_all = _view_all_enabled()
-
-    def _count_rows(table: str) -> int:
-        params = {}
-        where = "WHERE deleted_at IS NULL"
-        if not view_all:
-            where += " AND owner = :o"
-            params["o"] = owner
-        with get_conn() as conn:
-            return int(conn.execute(text(f"SELECT COUNT(*) FROM {table} {where}"), params).scalar() or 0)
-
-    def _soft_delete_all(table: str):
-        params = {}
-        where = "WHERE deleted_at IS NULL"
-        if not view_all:
-            where += " AND owner = :o"
-            params["o"] = owner
-        with get_conn() as conn:
-            conn.execute(text(f"UPDATE {table} SET deleted_at = {_now_sql()} {where}"), params)
-        st.cache_data.clear(); st.rerun()
-
-    c1, c2, c3 = st.columns(3, gap="small")
-
-    with c1:
-        st.caption("VENTAS (transacciones)")
-        st.metric("Registros", _count_rows("transacciones"))
-        if st.button("🗑️ Eliminar ventas", use_container_width=True, key="bulk_del_ventas"):
-            _soft_delete_all("transacciones")
-
-    with c2:
-        st.caption("GASTOS")
-        st.metric("Registros", _count_rows("gastos"))
-        if st.button("🗑️ Eliminar gastos", use_container_width=True, key="bulk_del_gastos"):
-            _soft_delete_all("gastos")
-
-    with c3:
-        st.caption("PRÉSTAMOS")
-        st.metric("Registros", _count_rows("prestamos"))
-        if st.button("🗑️ Eliminar préstamos", use_container_width=True, key="bulk_del_prestamos"):
-            _soft_delete_all("prestamos")
-
+            with col_b:
+                sa  = st.session_state.get("_gs_sa_email", "—")
+                sid = (GSPREADSHEET_ID or "—")
+                st.caption(f"Service Account: {sa}")
+                st.caption(f"Sheet ID/URL: {sid}")
 
 elif show("⚙️ Mi Cuenta"):
     st.subheader("Mi Cuenta")
     st.caption(f"Sesión: **{user}** · rol **{role}**")
 
+    # ===== Acciones rápidas =====
     c1, c2, c3 = st.columns(3, gap="small")
     if c1.button("🚪 Cerrar sesión", use_container_width=True):
-        audit("logout", extra={"user": user}); _clear_session(); st.success("Sesión cerrada"); st.stop()
+        try:
+            audit("logout", extra={"user": user})
+        except Exception:
+            pass
+        _clear_session()
+        st.success("Sesión cerrada")
+        st.stop()
+
     if c2.button("🔄 Reiniciar estado y caché", use_container_width=True):
-        st.session_state.clear(); st.rerun()
+        st.session_state.clear()
+        st.rerun()
+
     if c3.button("💾 Copia de seguridad local (sqlite)", use_container_width=True):
-        p = make_db_backup(); set_meta("LAST_BACKUP_ISO", datetime.now().isoformat(timespec="seconds"))
-        finish_and_refresh(f"Backup creado: {p}")
+        try:
+            p = make_db_backup()
+            set_meta("LAST_BACKUP_ISO", datetime.now().isoformat(timespec="seconds"))
+            finish_and_refresh(f"Backup creado: {p}")
+        except Exception as e:
+            st.error(f"No se pudo crear el backup: {e}")
+
+    # Último backup (si existe)
+    try:
+        last_bkp = str(get_meta("LAST_BACKUP_ISO", "")) or ""
+        if last_bkp:
+            st.caption(f"Último backup local: {last_bkp}")
+    except Exception:
+        pass
 
     st.markdown("---")
+
+    # ===== Cambiar contraseña (con validaciones) =====
     with st.form("SELF_pw_form2", clear_on_submit=True):
-        newp = st.text_input("Nueva contraseña", type="password")
-        ok = st.form_submit_button("Cambiar mi contraseña")
-    if ok:
-        AUTH.db_set_password(user, newp); notify_ok("Tu contraseña fue actualizada.")
-    
+        newp  = st.text_input("Nueva contraseña", type="password")
+        newp2 = st.text_input("Confirmar nueva contraseña", type="password")
+        pw_ok = st.form_submit_button("Cambiar mi contraseña")
+
+    if pw_ok:
+        try:
+            if not newp or not newp2:
+                st.warning("Escribe y confirma la nueva contraseña.")
+            elif newp != newp2:
+                st.warning("Las contraseñas no coinciden.")
+            elif len(newp) < 8:
+                st.warning("La contraseña debe tener al menos 8 caracteres.")
+            else:
+                AUTH.db_set_password(user, newp)
+                notify_ok("Tu contraseña fue actualizada.")
+        except Exception as e:
+            st.error(f"No se pudo cambiar la contraseña: {e}")
+
+    # ===== Respaldo personal en Google Sheets =====
     st.markdown("### Respaldo personal en Google Sheets")
-    cA, cB = st.columns(2, gap="small")
 
-    with cA:
-        if st.button("🔄 Actualizar CAMBIOS (incremental)", use_container_width=True, key="BK_u_flush"):
-            n = backup_user_flush_audit(user)
-            notify_ok(f"Respaldo actualizado. Cambios nuevos: {n}")
+    if not GOOGLE_SHEETS_ENABLED:
+        st.info("El respaldo en Google Sheets está deshabilitado en Administración.")
+    else:
+        cA, cB = st.columns(2, gap="small")
 
-    with cB:
-        if st.button("📦 Generar SNAPSHOT completo", use_container_width=True, key="BK_u_snap"):
-            backup_user_snapshot(user)
-            notify_ok("Snapshot completo escrito en tu hoja de respaldo.")
+        with cA:
+            if st.button("🔄 Actualizar CAMBIOS (incremental)", use_container_width=True, key="BK_u_flush"):
+                try:
+                    n = backup_user_flush_audit(user)
+                    notify_ok(f"Respaldo actualizado. Cambios nuevos: {n}")
+                except Exception as e:
+                    st.error(f"No se pudo actualizar el respaldo incremental: {e}")
 
-    # Enlace a la hoja
-    try:
-        sh, _ = _gs_open_or_create_user_book(user)   # ahora la función ya no revienta
-        st.markdown(f'[Abrir mi hoja en Google Sheets]({sh.url})')
-    except Exception as e:
-        st.warning(f"No se pudo abrir el enlace del respaldo: {e}")
+        with cB:
+            if st.button("📦 Generar SNAPSHOT completo", use_container_width=True, key="BK_u_snap"):
+                try:
+                    backup_user_snapshot(user)
+                    notify_ok("Snapshot completo escrito en tu hoja de respaldo.")
+                except Exception as e:
+                    st.error(f"No se pudo generar el snapshot: {e}")
+
+        # Enlace e info de la hoja
+        try:
+            sh, _ = _gs_open_or_create_user_book(user)
+            st.markdown(f'[Abrir mi hoja en Google Sheets]({sh.url})')
+        except Exception as e:
+            st.warning(f"No se pudo abrir/crear la hoja personal: {e}")
+
+        # Info auxiliar (útil para soporte)
+        try:
+            sa  = st.session_state.get("_gs_sa_email", "—")
+            sid = (GSPREADSHEET_ID or "—")
+            st.caption(f"Service Account: {sa}")
+            st.caption(f"Sheet ID/URL: {sid}")
+        except Exception:
+            pass
 
 # ---------------------------------------------------------
 # Administración (solo admin) — Google Sheets en una columna
@@ -4802,10 +5077,28 @@ if is_admin() and show("🛠️ Administración"):
     # -------- Google Sheets (una columna) --------
     st.subheader("Google Sheets")
 
-    gs_id_val = st.text_input("Google Sheet ID", value=GSPREADSHEET_ID, key="CFG_GSHEET_ID")
+    # Normaliza un ID a partir de URL o ID
+    def _normalize_sheet_id(raw: str) -> str:
+        s = (raw or "").strip()
+        if not s:
+            return ""
+        if "docs.google.com" in s:
+            # URL → intenta extraer /d/<ID>/
+            m = re.search(r"/d/([a-zA-Z0-9-_]+)", s)
+            return m.group(1) if m else s
+        return s
+
+    gs_id_val = st.text_input("Google Sheet ID o URL", value=(GSPREADSHEET_ID or ""), key="CFG_GSHEET_ID")
     if st.button("Guardar Sheets ID", use_container_width=True, key="BTN_SAVE_GSID"):
-        set_meta("GSHEET_ID", gs_id_val.strip())
-        finish_and_refresh("Google Sheet ID actualizado.")
+        try:
+            norm = _normalize_sheet_id(gs_id_val)
+            if not norm:
+                st.warning("Ingresa un ID o URL válido.")
+            else:
+                set_meta("GSHEET_ID", norm)
+                finish_and_refresh("Google Sheet ID actualizado.")
+        except Exception as e:
+            st.error(f"No se pudo guardar el ID: {e}")
 
     gs_enabled_ui = st.toggle(
         "Habilitar Google Sheets",
@@ -4813,21 +5106,34 @@ if is_admin() and show("🛠️ Administración"):
         key="CFG_GSHEETS_ENABLED"
     )
     if st.button("Guardar estado Sheets", use_container_width=True, key="BTN_SAVE_GSSTATE"):
-        set_meta("GSHEETS_ENABLED", 1 if gs_enabled_ui else 0)
-        finish_and_refresh("Estado de Google Sheets actualizado.")
+        try:
+            set_meta("GSHEETS_ENABLED", 1 if gs_enabled_ui else 0)
+            finish_and_refresh("Estado de Google Sheets actualizado.")
+        except Exception as e:
+            st.error(f"No se pudo cambiar el estado: {e}")
 
     st.divider()
 
     # -------- Acciones rápidas --------
     c3, c4, c5 = st.columns(3, gap="small")
     if c3.button("Sincronizar TODAS las tablas a Google Sheets", use_container_width=True):
-        if not GOOGLE_SHEETS_ENABLED:
-            st.info("Sincronización deshabilitada en Admin → “Habilitar Google Sheets”.")
-        else:
-            sync_tables_to_gsheet(list(GSHEET_MAP.keys()))
-            notify_ok("Sincronización enviada.")
+        try:
+            if not (st.session_state.get("CFG_GSHEETS_ENABLED") if "CFG_GSHEETS_ENABLED" in st.session_state else GOOGLE_SHEETS_ENABLED):
+                st.info("Sincronización deshabilitada en Admin → “Habilitar Google Sheets”.")
+            else:
+                sync_tables_to_gsheet(list(GSHEET_MAP.keys()))
+                notify_ok("Sincronización enviada.")
+        except Exception as e:
+            st.error(f"No se pudo sincronizar: {e}")
+
     if c4.button("Limpiar caché y recargar ahora", use_container_width=True):
-        finish_and_refresh("Caché limpiada", list(CACHE_READERS.keys()))
+        try:
+            finish_and_refresh("Caché limpiada", list(CACHE_READERS.keys()))
+        except Exception:
+            # Si falla, al menos fuerza recarga
+            st.cache_data.clear()
+            st.rerun()
+
     if c5.button("Cerrar sesión (admin)", use_container_width=True):
         _clear_session(); st.rerun()
 
@@ -4844,63 +5150,58 @@ if is_admin() and show("🛠️ Administración"):
 
     st.divider()
 
-
     # === Backup de usuarios (CSV) + Enviar a Google Sheets ===
     with st.container():
         st.subheader("📦 Respaldo de usuarios")
 
-        # 1) Trae usuarios desde Neon
+        # 1) Trae usuarios desde Neon (o deja DF vacío con cabeceras)
         try:
             df_users = AUTH.db_list_users()
-        except Exception as e:
+        except Exception:
             df_users = None
             if _auth_db_available() and not st.session_state.get("AUTH_OFFLINE"):
                 try:
                     df_users = AUTH.db_list_users()
-                except Exception as e:
+                except Exception:
                     df_users = None
-                    st.info("No hay conexión a la BD; puedes descargar CSV vacío o probar luego.")
-                    st.exception(e)
+        if df_users is None:
+            # Cabecera típica esperada
+            df_users = pd.DataFrame(columns=["id","username","role","created_at","updated_at"])
 
         c1, c2 = st.columns([1.2, 1], gap="small")
 
         with c1:
             st.caption("Descargar respaldo CSV")
-            if df_users is not None and not df_users.empty:
-                csv_buf = _df_to_csv_bytes(df_users)
-                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                st.download_button(
-                    "⬇️ Descargar users.csv",
-                    data=csv_buf,
-                    file_name=f"users_backup_{ts}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-            else:
-                st.info("Aún no hay usuarios para exportar.")
+            csv_buf = _df_to_csv_bytes(df_users)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.download_button(
+                "⬇️ Descargar users.csv",
+                data=csv_buf,
+                file_name=f"users_backup_{ts}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
 
         with c2:
-            st.caption("Enviar a Google Sheets (hoja 'users')")
-            # ID de la hoja: prueba primero desde secrets y deja input manual
-            default_id = st.secrets.get("USERS_SHEET_ID", "")
-            sheet_id = st.text_input("Sheets ID", value=default_id, key="USERS_SHEET_ID_INPUT")
-
+            st.caption("Enviar a Google Sheets (worksheet 'users')")
+            default_id = st.secrets.get("USERS_SHEET_ID", "") if hasattr(st, "secrets") else ""
+            sheet_in = st.text_input("Sheets ID o URL", value=default_id, key="USERS_SHEET_ID_INPUT")
             do_sync = st.button("📤 Enviar a Google Sheets", use_container_width=True)
             if do_sync:
-                if not sheet_id:
-                    st.warning("Ingresa el ID de la hoja de cálculo.")
-                elif df_users is None or df_users.empty:
+                sid = _normalize_sheet_id(sheet_in)
+                if not sid:
+                    st.warning("Ingresa el ID/URL de la hoja de cálculo.")
+                elif df_users.empty:
                     st.warning("No hay datos para enviar.")
                 else:
                     try:
-                        ok = _sync_users_to_google_sheets(df_users, sheet_id)
+                        ok = _sync_users_to_google_sheets(df_users, sid)
                         if ok:
                             st.success("Usuarios enviados a Google Sheets (worksheet 'users').")
                         else:
                             st.error("No se pudo enviar a Google Sheets (revisa credenciales/ID).")
                     except Exception as e:
-                        st.error("Fallo al enviar a Google Sheets.")
-                        st.exception(e)
+                        st.error(f"Fallo al enviar a Google Sheets: {e}")
 
     # -------- Gestión de usuarios --------
     with st.expander("➕ Crear usuario", expanded=False):
@@ -4912,12 +5213,14 @@ if is_admin() and show("🛠️ Administración"):
         if st.button("Crear usuario", key="USR_create_btn"):
             if not new_user or not new_pass:
                 st.error("Usuario y contraseña son obligatorios.")
+            elif len(new_user) < 3:
+                st.error("El usuario debe tener al menos 3 caracteres.")
+            elif len(new_pass) < 8:
+                st.error("La contraseña debe tener al menos 8 caracteres.")
             else:
                 try:
-                    # 👇 escribe en Neon (wrappers apuntan a auth_db)
                     AUTH.db_create_user(new_user, new_pass, new_role)
                     st.success(f"Usuario '{new_user}' creado.")
-                    # 👇 invalida cualquier cache/listado previo y fuerza rerun
                     st.session_state.pop("_users_debug_df", None)
                     st.rerun()
                 except Exception as e:
@@ -4934,20 +5237,36 @@ if is_admin() and show("🛠️ Administración"):
             if np1.button("Actualizar contraseña", key="USR_update_pwd"):
                 if not new_pass2:
                     st.error("Escribe la nueva contraseña.")
+                elif len(new_pass2) < 8:
+                    st.error("La contraseña debe tener al menos 8 caracteres.")
                 else:
-                    AUTH.db_set_password(sel_user, new_pass2)
-                    notify_ok("Contraseña actualizada.")
+                    try:
+                        AUTH.db_set_password(sel_user, new_pass2)
+                        notify_ok("Contraseña actualizada.")
+                    except Exception as e:
+                        st.error(f"No se pudo actualizar: {e}")
 
-            current_role = dfu.loc[dfu["username"]==sel_user,"role"].iloc[0]
-            new_role2 = np2.selectbox("Rol", ["user","admin"],
-                                    index=0 if current_role=="user" else 1,
-                                    key="USR_newrole2")
+            # Protección de "último admin"
+            current_role = dfu.loc[dfu["username"] == sel_user, "role"].iloc[0]
+            admins = dfu[dfu["role"] == "admin"]["username"].tolist()
+            is_last_admin = (len(admins) == 1 and admins[0] == sel_user)
+
+            new_role2 = np2.selectbox(
+                "Rol", ["user","admin"],
+                index=0 if current_role == "user" else 1,
+                key="USR_newrole2"
+            )
             if np2.button("Actualizar rol", key="USR_update_role"):
                 if sel_user == user and new_role2 != "admin":
                     st.error("No puedes quitarte el rol admin a ti mismo.")
+                elif is_last_admin and new_role2 != "admin":
+                    st.error("No puedes degradar al último administrador.")
                 else:
-                    AUTH.db_set_role(sel_user, new_role2)
-                    notify_ok("Rol actualizado.")
+                    try:
+                        AUTH.db_set_role(sel_user, new_role2)
+                        notify_ok("Rol actualizado.")
+                    except Exception as e:
+                        st.error(f"No se pudo actualizar el rol: {e}")
 
     with st.expander("🗂️ Lista de usuarios / eliminar", expanded=False):
         dfu = AUTH.db_list_users()
@@ -4958,12 +5277,19 @@ if is_admin() and show("🛠️ Administración"):
             del_user = st.selectbox("Usuario a eliminar", dfu["username"].tolist(), key="USR_del_sel")
             confirm_del_user = st.checkbox("Confirmo eliminar este usuario", key="USR_del_ok")
             if st.button("Eliminar usuario", type="primary", disabled=not confirm_del_user, key="USR_del_btn"):
+                admins = dfu[dfu["role"] == "admin"]["username"].tolist()
+                is_last_admin = (len(admins) == 1 and admins[0] == del_user)
                 if del_user == user:
                     st.error("No puedes eliminar tu propia cuenta.")
+                elif is_last_admin:
+                    st.error("No puedes eliminar al último administrador.")
                 else:
-                    AUTH.db_delete_user(del_user)
-                    notify_ok(f"Usuario '{del_user}' eliminado.")
-                    st.cache_data.clear()
+                    try:
+                        AUTH.db_delete_user(del_user)
+                        notify_ok(f"Usuario '{del_user}' eliminado.")
+                        st.cache_data.clear()
+                    except Exception as e:
+                        st.error(f"No se pudo eliminar: {e}")
 
     with st.expander("📜 Auditoría", expanded=False):
         # filtros
@@ -4980,27 +5306,37 @@ if is_admin() and show("🛠️ Administración"):
 
         limit = st.number_input("Máx. registros", min_value=100, max_value=10000, value=1000, step=100)
 
-        # consulta
+        # consulta (ajustada a Postgres/SQLite)
         conds = ["1=1"]
         p = {}
 
         if isinstance(rango, tuple) and len(rango) == 2:
-            # En Postgres es mejor castear: ts::date
-            conds.append("ts::date BETWEEN :d1 AND :d2")
+            if DIALECT == "postgres":
+                conds.append("ts::date BETWEEN :d1 AND :d2")
+            else:
+                conds.append("date(ts) BETWEEN :d1 AND :d2")
             p["d1"] = str(rango[0])
             p["d2"] = str(rango[1])
 
         if usuario:
-            # ILIKE para búsqueda case-insensitive en PG
-            conds.append('"user" ILIKE :u')
+            if DIALECT == "postgres":
+                conds.append('"user" ILIKE :u')
+            else:
+                conds.append('"user" LIKE :u')
             p["u"] = f"%{usuario.strip()}%"
 
         if acc:
-            conds.append("action ILIKE :a")
+            if DIALECT == "postgres":
+                conds.append("action ILIKE :a")
+            else:
+                conds.append("action LIKE :a")
             p["a"] = f"%{acc.strip()}%"
 
         if tabla:
-            conds.append("table_name ILIKE :t")
+            if DIALECT == "postgres":
+                conds.append("table_name ILIKE :t")
+            else:
+                conds.append("table_name LIKE :t")
             p["t"] = f"%{tabla.strip()}%"
 
         p["lim"] = int(limit)
@@ -5031,17 +5367,25 @@ if is_admin() and show("🛠️ Administración"):
             # descarga
             csv = df_aud.to_csv(index=False).encode("utf-8-sig")
             st.download_button("⬇️ Exportar auditoría CSV", csv,
-                            file_name=f"audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                               file_name=f"audit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
 
-            # purga opcional
+            # purga opcional (según motor)
             colp1, colp2 = st.columns([1,3], gap="small")
             dias = colp1.number_input("Purgar > días", min_value=7, max_value=3650, value=180, step=30)
             if colp2.button("🧹 Purgar registros anteriores a ese umbral"):
-                with get_conn() as conn:
-                    conn.execute("DELETE FROM audit_log WHERE ts < datetime('now', ?)", (f"-{int(dias)} days",))
-                audit("audit.purge", extra={"older_than_days": int(dias)})
-                st.success(f"Auditoría purgada (> {int(dias)} días).")
-                st.cache_data.clear(); st.rerun()
+                try:
+                    with get_conn() as conn:
+                        if DIALECT == "postgres":
+                            conn.execute(text("DELETE FROM audit_log WHERE ts < NOW() - (:d || ' days')::interval"),
+                                         {"d": int(dias)})
+                        else:
+                            conn.execute(text("DELETE FROM audit_log WHERE ts < datetime('now', :off)"),
+                                         {"off": f"-{int(dias)} days"})
+                    audit("audit.purge", extra={"older_than_days": int(dias)})
+                    st.success(f"Auditoría purgada (> {int(dias)} días).")
+                    st.cache_data.clear(); st.rerun()
+                except Exception as e:
+                    st.error(f"No se pudo purgar auditoría: {e}")
         else:
             st.info("Sin registros con los filtros actuales.")
 
@@ -5068,21 +5412,24 @@ if is_admin() and show("🛠️ Administración"):
                 except Exception:
                     pass  # si falla el backup no bloqueamos el borrado
 
-                # 3) Vaciar tablas (¡sin users!)
+                # 3) Vaciar tablas (¡sin users!) según motor
                 with get_conn() as conn:
-                    # Borra rápido y reinicia autoincrementos; respeta FKs con CASCADE
-                    conn.execute(text("""
-                        TRUNCATE TABLE
-                            transacciones,
-                            gastos,
-                            prestamos,
-                            inventario,
-                            deudores_ini,
-                            consolidado_diario,
-                            audit_log
-                        RESTART IDENTITY CASCADE
-                    """))
-                    conn.execute(text("DELETE FROM meta"))
+                    if DIALECT == "postgres":
+                        conn.execute(text("""
+                            TRUNCATE TABLE
+                                transacciones,
+                                gastos,
+                                prestamos,
+                                inventario,
+                                deudores_ini,
+                                consolidado_diario,
+                                audit_log
+                            RESTART IDENTITY CASCADE
+                        """))
+                        conn.execute(text("DELETE FROM meta"))
+                    else:
+                        for t in ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario","audit_log","meta"]:
+                            conn.execute(text(f"DELETE FROM {t}"))
 
                 audit("db.wipe", extra={})
 
@@ -5108,6 +5455,6 @@ SHOW_DEBUG_ADMIN = os.getenv("SHOW_DEBUG_ADMIN", "1") == "1"
 if is_admin and SHOW_DEBUG_ADMIN:
     ver_neon = st.checkbox("👀 Ver usuarios en Neon (debug)")
     if ver_neon:
-        # ... tu código para listar usuarios en Neon ...
+        # ... tu código para listar/inspeccionar usuarios en Neon ...
         pass
 # ---------------------------------------------------------
