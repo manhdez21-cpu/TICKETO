@@ -3949,6 +3949,17 @@ if show("🧮 Diario Consolidado"):
     total_ventas  = float(total_cuenta + total_efectivo)
     total_ganancia= float(v_df['ganancia'].sum()) if not v_df.empty else 0.0
 
+    # ---- necesarios para este bloque ----
+    # Deudores desde (corte actual)
+    corte_actual = get_corte_deudores()
+    _, nuevo_total = deudores_unificados(corte_actual)
+
+    # Efectivo global actual y métrica
+    efectivo_ini, _ = get_efectivo_global_now()
+    metric_box = st.empty()
+    metric_box.metric("EFECTIVO", money(efectivo_ini))
+    # -------------------------------------
+
     # === Tarjetas alineadas y filtradas (oculta vacías y también 0) ===
     items = [
         {"title": "Total ventas",     "value": total_ventas,     "fmt": money},
@@ -3958,6 +3969,8 @@ if show("🧮 Diario Consolidado"):
         {"title": "Total préstamos",  "value": total_prestamos,  "fmt": money},
         {"title": "Inventario total", "value": total_inventario, "fmt": money},
     ]
+
+    render_stat_cards(items, hide_empty=True, hide_zero=True)
 
     # Layout 2:1 — izquierda: monto + guardar / derecha: confirmar + eliminar
     colL, colR = st.columns([2, 1], gap="small")
@@ -3982,7 +3995,6 @@ if show("🧮 Diario Consolidado"):
             delete_consolidado("GLOBAL")
             metric_box.metric("EFECTIVO", money(0.0))
             finish_and_refresh("Efectivo (GLOBAL) eliminado.", ["consolidado_diario"])
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ===== Total de capital (minimal) =====
     total_capital = float(nuevo_total + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
