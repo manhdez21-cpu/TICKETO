@@ -18,6 +18,15 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+# 👇 Debe ser la PRIMERA llamada a Streamlit
+st.set_page_config(
+    page_title="TickeTo",
+    page_icon="💸",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+
 # --- Config de página: título y favicon ---
 try:
     _logo = Image.open("assets/ticketo.png")      # tu logo
@@ -36,13 +45,6 @@ except Exception:
         initial_sidebar_state="collapsed",
     )
 
-# 👇 Debe ser la PRIMERA llamada a Streamlit
-st.set_page_config(
-    page_title="TickeTo",
-    page_icon="💸",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
 st.markdown("""
 <style>
