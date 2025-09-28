@@ -4410,8 +4410,8 @@ elif show("💸 Gastos"):
                 finish_and_refresh(f"Eliminados {len(ids)} gastos.", ["gastos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
-            ver_eliminados_g = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="GTO_show_del")
-
+            ver_eliminados_g = st.session_state.get("GTO_show_del", False)
+            ver_eliminados_g = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="GTO_show_del")            
             if ver_eliminados_g:
                 with get_conn() as conn:
                     base = "SELECT id, fecha, concepto, valor, notas FROM gastos WHERE deleted_at IS NOT NULL"
@@ -4522,7 +4522,8 @@ elif show("🤝 Préstamos"):
                 finish_and_refresh(f"Eliminados {len(ids)} préstamos.", ["prestamos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
-
+            
+        ver_eliminados_p = st.session_state.get("PRE_show_del", False)
         ver_eliminados_p = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="PRE_show_del")
 
         if ver_eliminados_p:
@@ -4629,32 +4630,33 @@ elif show("📦 Inventario"):
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
 
+        ver_eliminados_i = st.session_state.get("INV_show_del", False)
         ver_eliminados_i = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="INV_show_del")
 
-if ver_eliminados_i:
-    with get_conn() as conn:
-        base = "SELECT id, producto, valor_costo FROM inventario WHERE deleted_at IS NOT NULL"
-        if _view_all_enabled():
-            q = text(base + " ORDER BY id DESC")
-            params = {}
-        else:
-            q = text(base + " AND owner=:o ORDER BY id DESC")
-            params = {"o": _current_owner()}
-        i_del = pd.read_sql_query(q, conn, params=params or None)
+        if ver_eliminados_i:
+            with get_conn() as conn:
+                base = "SELECT id, producto, valor_costo FROM inventario WHERE deleted_at IS NOT NULL"
+                if _view_all_enabled():
+                    q = text(base + " ORDER BY id DESC")
+                    params = {}
+                else:
+                    q = text(base + " AND owner=:o ORDER BY id DESC")
+                    params = {"o": _current_owner()}
+                i_del = pd.read_sql_query(q, conn, params=params or None)
 
-        if i_del.empty:
-            st.info("No hay ítems eliminados.")
-        else:
-            for _, row in i_del.iterrows():
-                c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
-                with c_info:
-                    st.markdown(f"**{row['producto']}** — ${row['valor_costo']:,.0f}")
-                if c_restore.button("↩️ Restaurar", key=f"restore_i_{int(row['id'])}"):
-                    restore_row("inventario", int(row["id"]))
-                    st.cache_data.clear(); st.rerun()
-                if is_admin() and c_hard.button("❌ Borrar", key=f"hard_i_{int(row['id'])}"):
-                    hard_delete_row("inventario", int(row["id"]))
-                    st.cache_data.clear(); st.rerun()
+                if i_del.empty:
+                    st.info("No hay ítems eliminados.")
+                else:
+                    for _, row in i_del.iterrows():
+                        c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                        with c_info:
+                            st.markdown(f"**{row['producto']}** — ${row['valor_costo']:,.0f}")
+                        if c_restore.button("↩️ Restaurar", key=f"restore_i_{int(row['id'])}"):
+                            restore_row("inventario", int(row["id"]))
+                            st.cache_data.clear(); st.rerun()
+                        if is_admin() and c_hard.button("❌ Borrar", key=f"hard_i_{int(row['id'])}"):
+                            hard_delete_row("inventario", int(row["id"]))
+                            st.cache_data.clear(); st.rerun()
 
 # ---------------------------------------------------------
 # Deudores
