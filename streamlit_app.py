@@ -18,10 +18,9 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-# 👇 Debe ser la PRIMERA llamada a Streamlit
+# ✳️ PRIMERA y ÚNICA llamada de Streamlit:
 st.set_page_config(
     page_title="TickeTo",
-    page_icon="💸",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
