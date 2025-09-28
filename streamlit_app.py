@@ -7,6 +7,7 @@
 
 
 import streamlit as st
+from PIL import Image
 
 import auth_db as AUTH
 from io import BytesIO
@@ -16,6 +17,24 @@ from sqlalchemy import text
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
+
+# --- Config de página: título y favicon ---
+try:
+    _logo = Image.open("assets/ticketo.png")      # tu logo
+    st.set_page_config(
+        page_title="TickeTo",
+        page_icon=_logo,                          # usa el logo como favicon
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+except Exception:
+    # Fallback si no encuentra el archivo (no rompe la app)
+    st.set_page_config(
+        page_title="TickeTo",
+        page_icon="💸",                           # emoji temporal
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
 
 # 👇 Debe ser la PRIMERA llamada a Streamlit
 st.set_page_config(
@@ -3964,28 +3983,22 @@ if show("🧮 Diario Consolidado"):
     ]
     render_stat_cards(items, hide_empty=True, hide_zero=False)  # 👈 no ocultes 0
 
-    # Layout 2:1 — izquierda: monto + guardar / derecha: confirmar + eliminar
-    colL, colR = st.columns([2, 1], gap="small")
+    # Layout 2:1 (solo usamos la izquierda; derecha queda vacía)
+    colL, _ = st.columns([2, 1], gap="small")
 
     with colL:
-        # (deja visible el input arriba)
-        CONS_efectivo = currency_input("Efectivo en caja", key="CONS_efectivo_input", value=float(efectivo_ini))
-        # Botón guardar
-        if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True, key="CONS_efectivo_save"):
+        CONS_efectivo = currency_input("Efectivo en caja", key="CONS_efectivo_input",
+                                    value=float(efectivo_ini))
+        if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True,
+                    key="CONS_efectivo_save"):
+            # Reemplazo automático: primero borro, luego inserto/actualizo
+            delete_consolidado("GLOBAL")
             upsert_consolidado("GLOBAL", float(CONS_efectivo), "")
+
             nuevo_ef, _ = get_efectivo_global_now()
             metric_box.metric("EFECTIVO", money(nuevo_ef))
             components.html("<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
             finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
-
-    with colR:
-        # 🔧 Espaciador para alinear el botón de eliminación a la altura del de Guardar
-        st.markdown("<div style='height:38px'></div>", unsafe_allow_html=True)  # ~altura del input de la izquierda
-        confirm_del = st.checkbox("Confirmar eliminación", key="CONS_del_confirm")
-        if st.button("🗑️ Eliminar efectivo (global)", use_container_width=True, disabled=not confirm_del, key="CONS_efectivo_delete"):
-            delete_consolidado("GLOBAL")
-            metric_box.metric("EFECTIVO", money(0.0))
-            finish_and_refresh("Efectivo (GLOBAL) eliminado.", ["consolidado_diario"])
 
     # ===== Total de capital (minimal) =====
     total_capital = float(total_deu + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
