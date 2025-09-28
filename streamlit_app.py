@@ -18,31 +18,18 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-# ✳️ PRIMERA y ÚNICA llamada de Streamlit:
+# ÚNICA configuración de página (primera instrucción st.*)
+try:
+    _logo = Image.open("assets/ticketo.png")   # tu logo
+except Exception:
+    _logo = "💸"                                # fallback emoji si no existe el archivo
+
 st.set_page_config(
     page_title="TickeTo",
+    page_icon=_logo,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-
-# --- Config de página: título y favicon ---
-try:
-    _logo = Image.open("assets/ticketo.png")      # tu logo
-    st.set_page_config(
-        page_title="TickeTo",
-        page_icon=_logo,                          # usa el logo como favicon
-        layout="wide",
-        initial_sidebar_state="collapsed",
-    )
-except Exception:
-    # Fallback si no encuentra el archivo (no rompe la app)
-    st.set_page_config(
-        page_title="TickeTo",
-        page_icon="💸",                           # emoji temporal
-        layout="wide",
-        initial_sidebar_state="collapsed",
-    )
 
 
 st.markdown("""
