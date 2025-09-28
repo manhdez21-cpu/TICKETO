@@ -48,11 +48,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def render_stat_cards(items, hide_empty=True, hide_zero=False):
-    """
-    items: lista de dicts con {'title': str, 'value': Any, 'fmt': callable|None}
-    hide_empty: oculta tarjetas con title vacío o value en [None, ""]
-    hide_zero: además oculta tarjetas con value == 0 o 0.0
-    """
     def _ok(v):
         if v is None or v == "": return False
         if hide_zero and (isinstance(v, (int, float)) and float(v) == 0.0): return False
@@ -135,10 +130,6 @@ _apply_compact_css(_compact_level)
 
 import os
 import bcrypt  # needed for bcrypt hashes
-# REMOVED (optional flag): os.environ.setdefault("BYPASS_BOOT", "1")      # salta ping a Neon → arranca offline
-# REMOVED (optional flag): os.environ.setdefault("DISABLE_COMPACT", "1")  # no fuerza ?compact=1&m=1 (evita loop)
-# REMOVED (optional flag): os.environ.setdefault("DEV_DEMO_USERS", "1")   # habilita usuarios DEMO para login
-# REMOVED (optional flag): os.environ.setdefault("GSHEETS_ENABLED", "0")  # no intenta Google Sheets de entrada
 
 # --- Arranque seguro (soporta BYPASS_BOOT y ausencia de AUTH) -----------------
 def _try_safe_boot():
@@ -301,11 +292,6 @@ def _ensure_compact_query_params():
     except Exception:
         pass
 
-# if os.environ.get("DISABLE_COMPACT", "1") != "1":
-#     _ensure_compact_query_params()
-
-
-
 st.markdown("""
 <style>
 /* 1) Sin relleno extra arriba, pero sin romper títulos */
@@ -329,26 +315,6 @@ margin:0 !important; padding:0 !important; min-height:0 !important; line-height:
 </style>
 """, unsafe_allow_html=True)
 
-# components.html("""
-# <script>
-# (function(){
-#   try{
-#     if (!window.matchMedia("(max-width: 900px)").matches) return;
-#     if (window._tt_compact_applied) return;         // ← fusible
-#     var url = new URL(window.location.href);
-#     var changed = false;
-#     if (url.searchParams.get("compact")!=="1"){ url.searchParams.set("compact","1"); changed = true; }
-#     if (url.searchParams.get("m")!=="1"){ url.searchParams.set("m","1"); changed = true; }
-#     if (changed){
-#       window._tt_compact_applied = true;            // ← marca
-#       history.replaceState(null, "", url.toString());
-#       setTimeout(function(){ location.reload(); }, 0);
-#     }
-#   }catch(e){}
-# })();
-# </script>
-# """, height=0, width=0)
-
 import hashlib
 from pathlib import Path
 
@@ -361,13 +327,6 @@ def _app_sig() -> str:
         return "nohash"
 
 st.markdown('<meta name="google" content="notranslate">', unsafe_allow_html=True)
-
-# with st.sidebar:
-#     p = pathlib.Path(__file__).resolve()
-#     st.caption(f"🧩 Build: {APP_BUILD}")
-#     st.caption(f"📄 Script: {p.name}")
-#     st.caption(f"📁 Carpeta: {p.parent}")
-#     st.caption(f"🔑 App sig: {_app_sig()}")
 
 # --- Mantener header nativo (recupera la hamburguesa) ---
 st.markdown("""
@@ -390,18 +349,6 @@ padding-top: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
-
-# st.markdown("""
-# <style>
-# @media (prefers-color-scheme: dark) {
-#   [data-testid="stMetric"]{ background:#0b0f19; border-color:#1f2937; }
-#   details[data-testid="stExpander"]{ background:#0b0f19; border-color:#1f2937; }
-#   .stButton > button[kind="primary"]{ background:#6366f1 !important; border-color:#6366f1 !important; }
-#   [data-testid="stDataFrame"] table tbody tr:nth-child(odd){ background:#0f172a; }
-#   [data-testid="stDataFrame"] table thead th{ background:#0b0f19; }
-# }
-# </style>
-# """, unsafe_allow_html=True)
 
 
 st.markdown("""
@@ -1829,23 +1776,34 @@ def _delete_row(table: str, row_id: int):
 
 
 def delete_consolidado(fecha_str: str):
-    owner = _current_owner()
+    """Borrado lógico del consolidado por fecha/clave y owner actual."""
+    owner = (_current_owner() or "")
+    params = {"f": fecha_str, "o": owner}
+
+    before = []
     with get_conn() as conn:
-        cur = conn.execute(
-            text("SELECT * FROM consolidado_diario WHERE fecha=:f AND owner=:o"),
-            {"f": fecha_str, "o": owner}
-        )
-        row = cur.fetchone()
-        cols = [d[0] for d in cur.description] if cur.description else []
-        before = dict(zip(cols, row)) if row else None
+        # Obtener filas antes de borrar (para auditoría)
+        cur = conn.execute(text(
+            "SELECT * FROM consolidado_diario WHERE fecha=:f AND owner=:o"
+        ), params)
+        before = [dict(m) for m in cur.mappings().all()]
+
+        # Borrado lógico
         if DIALECT == "postgres":
-            conn.execute(text("UPDATE consolidado_diario SET deleted_at = NOW() WHERE fecha=:f AND owner=:o"),
-                        {"f": fecha_str, "o": owner})
+            conn.execute(text(
+                "UPDATE consolidado_diario SET deleted_at = NOW() WHERE fecha=:f AND owner=:o"
+            ), params)
         else:
-            conn.execute(text("UPDATE consolidado_diario SET deleted_at = datetime('now') WHERE fecha=:f AND owner=:o"),
-                        {"f": fecha_str, "o": owner})
-    audit("delete", table_name="consolidado_diario",
-          extra={"fecha": fecha_str, "owner": owner}, before=before)
+            conn.execute(text(
+                "UPDATE consolidado_diario SET deleted_at = datetime('now') WHERE fecha=:f AND owner=:o"
+            ), params)
+
+    # Auditoría (si tenías audit ya llamada adentro, puedes dejar solo esta)
+    try:
+        for b in before:
+            audit("delete.soft", table_name="consolidado_diario", row_id=b.get("id"), before=b)
+    except Exception:
+        pass
 
 def upsert_consolidado(fecha_str: str, efectivo, notas: str = ""):
     owner = _current_owner()
@@ -4434,36 +4392,36 @@ elif show("💸 Gastos"):
             ids = [int(g_editor.loc[i,'id']) for i in idxs]
             if ids:
                 for rid in ids:
-                    delete_gasto_id(rid)
+                    soft_delete_row("gastos", rid)
                 finish_and_refresh(f"Eliminados {len(ids)} gastos.", ["gastos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
-            ver_eliminados_g = st.session_state.get("GTO_show_del", False)
-            ver_eliminados_g = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="GTO_show_del")            
-            if ver_eliminados_g:
-                with get_conn() as conn:
-                    base = "SELECT id, fecha, concepto, valor, notas FROM gastos WHERE deleted_at IS NOT NULL"
-                    if _view_all_enabled():
-                        q = text(base + " ORDER BY id DESC")
-                        params = {}
-                    else:
-                        q = text(base + " AND owner=:o ORDER BY id DESC")
-                        params = {"o": _current_owner()}
-                    g_del = pd.read_sql_query(q, conn, params=params or None)
+        ver_eliminados_g = st.session_state.get("GTO_show_del", False)
+        ver_eliminados_g = st.toggle("Mostrar eliminados (para restaurar)", value=False, key="GTO_show_del")            
+        if ver_eliminados_g:
+            with get_conn() as conn:
+                base = "SELECT id, fecha, concepto, valor, notas FROM gastos WHERE deleted_at IS NOT NULL"
+                if _view_all_enabled():
+                    q = text(base + " ORDER BY id DESC")
+                    params = {}
+                else:
+                    q = text(base + " AND owner=:o ORDER BY id DESC")
+                    params = {"o": _current_owner()}
+                g_del = pd.read_sql_query(q, conn, params=params or None)
 
-                    if g_del.empty:
-                        st.info("No hay gastos eliminados.")
-                    else:
-                        for _, row in g_del.iterrows():
-                            c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
-                            with c_info:
-                                st.markdown(f"**{row['fecha']}** — {row['concepto']} • ${row['valor']:,.0f}")
-                            if c_restore.button("↩️ Restaurar", key=f"restore_g_{int(row['id'])}"):
-                                restore_row("gastos", int(row["id"]))
-                                st.cache_data.clear(); st.rerun()
-                            if is_admin() and c_hard.button("❌ Borrar", key=f"hard_g_{int(row['id'])}"):
-                                hard_delete_row("gastos", int(row["id"]))
-                                st.cache_data.clear(); st.rerun()
+                if g_del.empty:
+                    st.info("No hay gastos eliminados.")
+                else:
+                    for _, row in g_del.iterrows():
+                        c_info, c_restore, c_hard = st.columns([6,2,2], gap="small")
+                        with c_info:
+                            st.markdown(f"**{row['fecha']}** — {row['concepto']} • ${row['valor']:,.0f}")
+                        if c_restore.button("↩️ Restaurar", key=f"restore_g_{int(row['id'])}"):
+                            restore_row("gastos", int(row["id"]))
+                            st.cache_data.clear(); st.rerun()
+                        if is_admin() and c_hard.button("❌ Borrar", key=f"hard_g_{int(row['id'])}"):
+                            hard_delete_row("gastos", int(row["id"]))
+                            st.cache_data.clear(); st.rerun()
 
 # ---------------------------------------------------------
 # Préstamos
@@ -4495,11 +4453,6 @@ elif show("🤝 Préstamos"):
     # ---- Listado / edición / borrado ----
     p = read_prestamos()
     if not p.empty:
-        # Totales + tabla de vista
-        st.metric("TOTAL PRÉSTAMOS", money(float(p['valor'].sum())))
-        p_show = p.sort_values('id', ascending=False).copy()
-        p_show = df_format_money(p_show, ['valor'])
-        st.dataframe(p_show, use_container_width=True)
 
         # =========================================================
         # === PRÉSTAMOS: edición/borrado en línea (editor)      ===
@@ -4546,7 +4499,7 @@ elif show("🤝 Préstamos"):
             ids = [int(pp.iloc[i]['id']) for i in idxs]
             if ids:
                 for rid in ids:
-                    delete_prestamo_id(rid)
+                    soft_delete_row("prestamos", rid)
                 finish_and_refresh(f"Eliminados {len(ids)} préstamos.", ["prestamos"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
@@ -4608,10 +4561,6 @@ elif show("📦 Inventario"):
     st.divider()
     i = read_inventario()
     if not i.empty:
-        st.metric("TOTAL INVENTARIO", money(float(i['valor_costo'].sum())))
-        i_show = i.sort_values('id', ascending=False).copy()
-        i_show = df_format_money(i_show, ['valor_costo'])
-        st.dataframe(i_show, use_container_width=True)
 
     # === INVENTARIO: edición/borrado en línea ===
         ii = i.sort_values('id', ascending=False).copy()
@@ -4653,7 +4602,7 @@ elif show("📦 Inventario"):
             ids = [int(i_editor.loc[i,'id']) for i in idxs]
             if ids:
                 for rid in ids:
-                    delete_inventario_id(rid)
+                    soft_delete_row("inventario", rid)
                 finish_and_refresh(f"Eliminados {len(ids)} ítems.", ["inventario"])
             else:
                 st.info("Marca al menos una fila en ‘Eliminar’.")
