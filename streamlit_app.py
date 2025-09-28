@@ -2246,6 +2246,26 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
         df2 = df2[(df2["fecha"]>=f0) & (df2["fecha"]<=f1)]
     return df2
 
+def aplicar_filtros_guardados(df: pd.DataFrame, cols: list[str], key: str) -> pd.DataFrame:
+    """Aplica los filtros guardados en session_state sin renderizar widgets."""
+    texto = st.session_state.get(f"q_{key}", "")
+    fecha_rango = st.session_state.get(f"rng_{key}", None)
+
+    out = df.copy()
+
+    if texto:
+        patt = str(texto).strip().upper()
+        mask = False
+        for c in cols:
+            mask = mask | out[c].astype(str).str.upper().str.contains(patt, na=False)
+        out = out[mask]
+
+    if isinstance(fecha_rango, tuple) and len(fecha_rango) == 2 and "fecha" in out:
+        f0, f1 = fecha_rango
+        out = out[(out["fecha"] >= f0) & (out["fecha"] <= f1)]
+
+    return out
+
 
 # --- User badge (logo + nombre arriba a la derecha) ---
 def _guess_logo_path(candidates: list[str] | None = None) -> str | None:
@@ -4036,21 +4056,13 @@ elif show("🧾 Ventas"):
         if "rng_ventas" not in st.session_state and "ventas_last_rango" in st.session_state:
             st.session_state["rng_ventas"] = st.session_state["ventas_last_rango"]
 
-        # Filtros de búsqueda y rango
-        flt_key = "ventas"
-        v = filtro_busqueda(v, ["cliente_nombre","observacion"], key=flt_key)
-        st.session_state["ventas_last_text"]  = st.session_state.get(f"q_{flt_key}", "")
-        st.session_state["ventas_last_rango"] = st.session_state.get(f"rng_{flt_key}", None)
+        # Aplicar filtros guardados (sin mostrar los controles todavía)
+        v = aplicar_filtros_guardados(v, ["cliente_nombre", "observacion"], key="ventas")
 
-        # Filtro por cliente(s)
-        clientes = (
-            v["cliente_nombre"].astype(str).str.strip()
-            .replace({"nan":"", "None":"", "": None}).dropna().unique().tolist()
-        )
-        clientes = sorted(clientes)
-        cli_sel = st.multiselect("Filtrar por cliente(s)", options=clientes, key="ventas_cli")
+        # Filtro por cliente(s) desde session_state (si hubo selección antes)
+        cli_sel = st.session_state.get("ventas_cli", [])
         if cli_sel:
-            patt = {c.strip().upper() for c in cli_sel}
+            patt = {str(c).strip().upper() for c in cli_sel}
             v = v[v["cliente_nombre"].astype(str).str.strip().str.upper().isin(patt)]
 
         # Export CSV del resultado filtrado
