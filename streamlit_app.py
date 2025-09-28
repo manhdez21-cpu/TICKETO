@@ -17,6 +17,14 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+# 👇 Debe ser la PRIMERA llamada a Streamlit
+st.set_page_config(
+    page_title="TickeTo",
+    page_icon="💸",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
 st.markdown("""
 <style>
 .stat-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
@@ -65,13 +73,6 @@ def render_stat_cards(items, hide_empty=True, hide_zero=False):
         )
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ✳️ PRIMERA y ÚNICA llamada de Streamlit:
-st.set_page_config(
-    page_title="TickeTo",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
 # --- Compact modes ---------------------------------------------------------
 def _get_compact_level() -> int:
