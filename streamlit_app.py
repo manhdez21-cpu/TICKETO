@@ -3,7 +3,7 @@
 #   pip install -r requirements.txt
 #   pip install extra-streamlit-components bcrypt
 #   streamlit run streamlit_app.py
-#.\.venv\Scripts\Activate
+# .\.venv\Scripts\Activate
 
 
 import streamlit as st
@@ -31,7 +31,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-
 st.markdown("""
 <style>
 .stat-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
@@ -57,7 +56,7 @@ def render_stat_cards(items, hide_empty=True, hide_zero=False):
     for it in items:
         title = str(it.get("title", "")).strip()
         val   = it.get("value", None)
-        if hide_empty and (not title or not _ok(val)): 
+        if hide_empty and (not title or not _ok(val)):
             continue
         fmt = it.get("fmt")
         s = fmt(val) if callable(fmt) else (f"{val:,}" if isinstance(val, (int,float)) else str(val))
@@ -272,8 +271,6 @@ def _update_row(table: str, row_id: int, payload: dict):
 if os.getenv("DEBUG_UI") == "1":
     st.write("🟢 Arrancando interfaz… (modo mínimo)")
 
-
-
 # --- Forzar compact por URL sin JS ni DOM hacks ---
 def _ensure_compact_query_params():
     try:
@@ -334,8 +331,7 @@ st.markdown("""
 /* No ocultes el header; si molesta la banda de color, solo achícala */
 div[data-testid="stDecoration"]{ height:0 !important; }
 </style>
-""", unsafe_allow_html=True) 
-        
+""", unsafe_allow_html=True)
 
 st.markdown("""
 <style>
@@ -349,7 +345,6 @@ padding-top: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
-
 
 st.markdown("""
 <style>
@@ -407,12 +402,12 @@ st.markdown("""
 .tt-stat{
 display:flex; gap:12px; align-items:center;
 padding:16px 16px; border:1px solid var(--card-br); border-radius:16px;
-background:var(--card-bg); box-shadow:0 4px 12px rgba(0,0,0,.05);
+background:var(--card-bg); box-shadow:0 6px 16px rgba(0,0,0,.05);
 }
 .tt-stat .ic{
 width:44px; height:44px; border-radius:12px;
 display:flex; align-items:center; justify-content:center;
-font-size:22px; color:white; box-shadow:0 8px 18px rgba(0,0,0,.15) inset;
+font-size:22px; color:white; box-shadow: 0 8px 18px rgba(0,0,0,.15) inset;
 }
 .tt-stat .meta{ min-width:0 }
 .tt-stat .lbl{
@@ -585,7 +580,6 @@ def _db_sig_runtime() -> tuple[int, int, int, int, int]:
 
 # ========== Sesiones persistentes (cookie) + login/roles ==========
 
-
 # --- Config desde ENV o Secrets (ENV tiene prioridad) ---
 def cfg(name: str, default=None):
     v = os.environ.get(name, None)
@@ -609,14 +603,23 @@ LOGOUT_SENTINEL = "__force_logout"
 COOKIE_SECURE_FLAG = str(cfg("COOKIE_SECURE", "1")).strip() == "1"
 DEV_DEMO = str(cfg("DEV_DEMO_USERS", "1")).strip() == "1"
 
-# CookieManager como widget (evita CachedWidgetWarning)
-_cookie_widget = stx.CookieManager()
-def _cookie_mgr():
-    return _cookie_widget
+# CookieManager como widget (evita CachedWidgetWarning) — fallback seguro si no hay stx
+if stx is not None:
+    _cookie_widget = stx.CookieManager()
+    def _cookie_mgr():
+        return _cookie_widget
+else:
+    class _DummyCookieMgr:
+        def get(self, key, default=None):
+            return st.session_state.get(f"_cookie_{key}", default)
+        def set(self, key, val, **_):
+            st.session_state[f"_cookie_{key}"] = val
+        def delete(self, key):
+            st.session_state.pop(f"_cookie_{key}", None)
+    def _cookie_mgr():
+        return _DummyCookieMgr()
 
 # --- Password hashing (bcrypt -> fallback PBKDF2) ---
-# --- Password hashing/verify universal (bcrypt + pbkdf2) ---
-
 def hash_password(pw: str) -> str:
     try:
         return "bcrypt$" + bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -670,7 +673,10 @@ def _b64url_decode(s: str) -> bytes:
 
 def _verify(token: str) -> dict | None:
     try:
-        b64, b64sig = token.split(".", 1)  # solo la 1ª vez
+        parts = (token or "").split(".", 1)
+        if len(parts) != 2:
+            return None
+        b64, b64sig = parts
         b = b64.encode("utf-8")
         sig = _b64url_decode(b64sig)
         expected = hmac.new(APP_SECRET.encode("utf-8"), b, hashlib.sha256).digest()
@@ -687,10 +693,22 @@ def _issue_session(username: str, role: str):
     ttl = st.session_state.get("sess_ttl", 7*24*3600)
     data = {"sub": username, "role": role, "exp": int(time.time()) + int(ttl)}
     token = _sign(data)
-    cm = _cookie_mgr(); cm.get_all()
+    cm = _cookie_mgr()
+    # Algunos CookieManager no tienen get_all (fallback)
+    try:
+        cm.get_all()
+    except Exception:
+        pass
     expires_dt = datetime.now() + timedelta(seconds=int(ttl))
-    cm.set(SESSION_COOKIE, token, expires_at=expires_dt, key="set_"+SESSION_COOKIE,
-        path="/", secure=COOKIE_SECURE_FLAG, same_site="Lax")
+    cm.set(
+        SESSION_COOKIE,
+        token,
+        expires_at=expires_dt,
+        key="set_"+SESSION_COOKIE,
+        path="/",
+        secure=COOKIE_SECURE_FLAG,
+        same_site="Lax",
+    )
     st.session_state["auth_user"] = username
     st.session_state["auth_role"] = role
     st.session_state["user"] = {"username": username, "role": role}
@@ -894,10 +912,9 @@ def audit(action: str,
                     "d": json.dumps(payload, ensure_ascii=False, default=str),
                 },
             )
-    except Exception as e:
-        pass  # added to keep except block non-empty
+    except Exception:
         # No romper la app por fallos de auditoría
-# REMOVED (debug print):         print("AUDIT ERROR:", e)
+        pass
 
 def init_db():
     schema = """
@@ -975,7 +992,7 @@ def init_db():
             schema
             .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
             .replace("DOUBLE PRECISION", "DOUBLE PRECISION")
-            .replace("\n        user TEXT,", '\n        "user" TEXT,')  # ← añade esta línea
+            .replace("\n        user TEXT,", '\n        "user" TEXT,')  # ← compat con palabra reservada
         )
 
     with get_conn() as c:
@@ -1000,28 +1017,8 @@ def ensure_indexes():
         for s in stmts:
             c.execute(text(s))
 
-from sqlalchemy import text
 
-def migrate_to_per_user_data():
-    """
-    Migra a datos por usuario si hiciera falta.
-    Corre de forma idempotente (IF NOT EXISTS).
-    """
-    url = _get_database_url()  # usa el helper que añadimos
-    from sqlalchemy import create_engine
-    eng = create_engine(url, pool_pre_ping=True)
-    with eng.begin() as conn:
-        conn.execute(text("ALTER TABLE IF EXISTS transacciones      ADD COLUMN IF NOT EXISTS owner TEXT"))
-        conn.execute(text("ALTER TABLE IF EXISTS gastos             ADD COLUMN IF NOT EXISTS owner TEXT"))
-        conn.execute(text("ALTER TABLE IF EXISTS prestamos          ADD COLUMN IF NOT EXISTS owner TEXT"))
-        conn.execute(text("ALTER TABLE IF EXISTS inventario         ADD COLUMN IF NOT EXISTS owner TEXT"))
-        conn.execute(text("ALTER TABLE IF EXISTS consolidado_diario ADD COLUMN IF NOT EXISTS owner TEXT"))
-        # índices opcionales (se crean solo si faltan)
-        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_trans_owner') IS NULL THEN CREATE INDEX idx_trans_owner ON transacciones(owner); END IF; END $$;"))
-        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_gastos_owner') IS NULL THEN CREATE INDEX idx_gastos_owner ON gastos(owner); END IF; END $$;"))
-        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_prest_owner')  IS NULL THEN CREATE INDEX idx_prest_owner  ON prestamos(owner); END IF; END $$;"))
-        conn.execute(text("DO $$ BEGIN IF to_regclass('public.idx_inv_owner')    IS NULL THEN CREATE INDEX idx_inv_owner    ON inventario(owner); END IF; END $$;"))
-    return True
+from sqlalchemy import text
 
 
 @st.cache_resource
@@ -1034,6 +1031,7 @@ def _boot_db_once():
     return True
 
 _BOOT = _boot_db_once()
+
 
 def _table_cols(conn, table: str) -> set[str]:
     if DIALECT == "sqlite":
@@ -1048,6 +1046,15 @@ def _table_cols(conn, table: str) -> set[str]:
         """), {"t": table}).fetchall()
         return {r[0] for r in rows}
 
+
+def has_column(conn, table: str, col: str) -> bool:
+    """Helper usado por _add_col_if_missing en SQLite."""
+    try:
+        return col in _table_cols(conn, table)
+    except Exception:
+        return False
+
+
 def _add_col_if_missing(conn, table: str, col_def: str):
     col_name = col_def.split()[0]
     if DIALECT == "postgres":
@@ -1058,6 +1065,10 @@ def _add_col_if_missing(conn, table: str, col_def: str):
 
 
 def migrate_to_per_user_data():
+    """
+    Migra a datos por usuario si hiciera falta.
+    Corre de forma idempotente (IF NOT EXISTS).
+    """
     tables = ["transacciones","gastos","prestamos","inventario","deudores_ini","consolidado_diario"]
     try:
         with get_conn() as conn:
@@ -1083,8 +1094,7 @@ def migrate_to_per_user_data():
 
     except Exception as e:
         st.warning(f"⚠️ Migración per-user falló: {e}")
-        
-migrate_to_per_user_data()
+
 
 import os, streamlit as st, urllib.parse as _u
 _dbu = os.getenv("DATABASE_URL", "")
@@ -1147,7 +1157,7 @@ def login_form() -> None:
             st.success("Bienvenido 👋"); st.rerun()
         else:
             audit("login.failed", extra={"user_try": uname, "src": src})
-            st.error("Usuario o contraseña inválidos (o autenticación offline sin DEMO).")    
+            st.error("Usuario o contraseña inválidos (o autenticación offline sin DEMO).")
 
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
@@ -1195,13 +1205,16 @@ def require_user():
 
     st.stop()  # evita que se renderice el resto sin login
 
+
 def is_admin() -> bool:
     u = st.session_state.get("user") or {}
     return str(u.get("role", "")).strip().lower() == "admin"
 
+
 def _row_owner() -> str:
     # Quién es el dueño de la fila que se inserta
     return (st.session_state.get("auth_user") or "admin").strip()
+
 
 def _owner_filter_sql(table: str) -> tuple[str, tuple]:
     # Admin ve todo; usuario normal ve solo lo suyo
@@ -1211,13 +1224,16 @@ def _owner_filter_sql(table: str) -> tuple[str, tuple]:
     else:
         return f"SELECT * FROM {table} WHERE owner = ?", (u or "",)
 
+
 def _current_owner() -> str:
     # dueño = usuario logueado; si no hay sesión (casos raros), "admin" para seeds/restore
     return st.session_state.get("auth_user") or "admin"
 
+
 def _view_all_enabled() -> bool:
     # Admin puede activar "ver todo" desde la sidebar
     return bool(st.session_state.get("admin_view_all", False) and is_admin())
+
 
 # =========================================================
 # Utilidades meta
@@ -1244,6 +1260,7 @@ def set_meta(key: str, value: str):
         before={"key": key, "value": old_value},
         after={"key": key, "value": value})
 
+
 def get_meta(key: str, default=None):
     with get_conn() as conn:
         row = conn.execute(
@@ -1252,11 +1269,14 @@ def get_meta(key: str, default=None):
         ).fetchone()
         return row[0] if row and row[0] is not None else default
 
+
 def set_corte_deudores(d: date):
     set_meta("CORTE_DEUDORES", d.isoformat())
 
+
 # Ajuste visual eliminado: no se usa más
 ADJ_VENTAS_EFECTIVO = 0.0
+
 
 # =========================================================
 # Lectores cacheados (invalidados por mtime/size del .sqlite)
@@ -1266,6 +1286,7 @@ def read_consolidado_diario():
     """Lee la tabla consolidado_diario para que finish_and_refresh pueda invalidarla selectivamente."""
     with get_conn() as conn:
         return pd.read_sql_query(text("SELECT * FROM consolidado_diario ORDER BY id DESC"), conn)
+
 
 @st.cache_data(show_spinner=False)
 def _read_ventas(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFrame:
@@ -1287,6 +1308,7 @@ def _read_ventas(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFr
     )
     return df
 
+
 def read_ventas() -> pd.DataFrame:
     return _read_ventas(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
@@ -1304,6 +1326,7 @@ def _read_gastos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.DataFr
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
     return df
 
+
 def read_gastos() -> pd.DataFrame:
     return _read_gastos(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
@@ -1320,6 +1343,7 @@ def _read_prestamos(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.Dat
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
     return df
 
+
 def read_prestamos() -> pd.DataFrame:
     return _read_prestamos(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
@@ -1335,6 +1359,7 @@ def _read_inventario(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.Da
         return pd.DataFrame(columns=['id','producto','valor_costo','owner'])
     df['valor_costo'] = pd.to_numeric(df['valor_costo'], errors='coerce').fillna(0.0)
     return df
+
 
 def read_inventario() -> pd.DataFrame:
     return _read_inventario(_db_sig_runtime(), _current_owner(), _view_all_enabled())
@@ -1354,6 +1379,7 @@ def _read_consolidado(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.D
     df['efectivo'] = pd.to_numeric(df['efectivo'], errors='coerce').fillna(0.0)
     return df
 
+
 def read_consolidado() -> pd.DataFrame:
     return _read_consolidado(_db_sig_runtime(), _current_owner(), _view_all_enabled())
 
@@ -1371,8 +1397,10 @@ def _read_deudores_ini(_sig: tuple[int, int], owner: str, view_all: bool) -> pd.
     df['valor']  = pd.to_numeric(df['valor'], errors='coerce').fillna(0.0)
     return df[['id','nombre','valor','owner']]
 
+
 def read_deudores_ini() -> pd.DataFrame:
     return _read_deudores_ini(_db_sig_runtime(), _current_owner(), _view_all_enabled())
+
 
 CACHE_READERS = {
     "transacciones": read_ventas,
@@ -1395,7 +1423,9 @@ def get_corte_deudores() -> date:
     except Exception:
         pass
     try:
-        return pd.to_datetime(s, errors="coerce", dayfirst=True).date()
+        dt = pd.to_datetime(s, errors="coerce", dayfirst=True)
+        # 👇 evita .date() sobre NaT
+        return dt.date() if pd.notna(dt) else date.today()
     except Exception:
         return date.today()
 
@@ -1828,7 +1858,7 @@ def upsert_consolidado(fecha_str: str, efectivo, notas: str = ""):
             audit("update", table_name="consolidado_diario", row_id=rid,
                   after={"fecha": fecha_str, "efectivo": ef, "notas": no, "owner": owner})
         else:
-            # 3) INSERT con upsert idempotente si tu dialecto lo soporta
+            # 3) INSERT con upsert idempotente
             conn.execute(
                 text("""
                     INSERT INTO consolidado_diario (fecha, efectivo, notas, owner)
@@ -1847,15 +1877,25 @@ def get_efectivo_global_now() -> tuple[float, str]:
     with get_conn() as conn:
         row = conn.execute(
             text("SELECT efectivo, notas FROM consolidado_diario "
-                "WHERE UPPER(TRIM(fecha))='GLOBAL' AND owner=:o"),
+                 "WHERE UPPER(TRIM(fecha))='GLOBAL' AND owner=:o"),
             {"o": owner}
         ).fetchone()
     if row:
         return float(row[0] or 0.0), str(row[1] or "")
     return 0.0, ""
 
+
+def _insert_with_returning(conn, sql_text, payload):
+    """Helper mínimo para obtener el id tras INSERT en ambos dialectos."""
+    cur = conn.execute(sql_text, payload)
+    if DIALECT == "postgres":
+        rid = cur.fetchone()[0]
+    else:
+        rid = getattr(cur, "lastrowid", None)
+    return rid
+
+
 def insert_venta(r: dict, owner_override: str | None = None) -> int:
-    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'fecha': _to_date_str(r.get('fecha')),
         'cliente_nombre': str(r.get('cliente_nombre') or '').strip(),
@@ -1869,19 +1909,27 @@ def insert_venta(r: dict, owner_override: str | None = None) -> int:
         'observacion': str(r.get('observacion') or '').strip(),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
-    sql = text("""
-        INSERT INTO transacciones
-        (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion, owner)
-        VALUES (:fecha, :cliente_nombre, :costo, :venta, :ganancia, :debe_flag, :paga, :abono1, :abono2, :observacion, :owner)
-    """)
+    if DIALECT == "postgres":
+        sql_ins = text("""
+            INSERT INTO transacciones
+            (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion, owner)
+            VALUES (:fecha, :cliente_nombre, :costo, :venta, :ganancia, :debe_flag, :paga, :abono1, :abono2, :observacion, :owner)
+            RETURNING id
+        """)
+    else:
+        sql_ins = text("""
+            INSERT INTO transacciones
+            (fecha, cliente_nombre, costo, venta, ganancia, debe_flag, paga, abono1, abono2, observacion, owner)
+            VALUES (:fecha, :cliente_nombre, :costo, :venta, :ganancia, :debe_flag, :paga, :abono1, :abono2, :observacion, :owner)
+        """)
+
     with get_conn() as conn:
-        cur = conn.execute(sql, payload)
-        row_id = cur.lastrowid
+        row_id = _insert_with_returning(conn, sql_ins, payload)
     audit("insert", table_name="transacciones", row_id=row_id, after=payload)
-    return row_id
+    return int(row_id or 0)
+
 
 def insert_gasto(r: dict, owner_override: str | None = None) -> int:
-    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'fecha': _to_date_str(r.get('fecha')),
         'concepto': str(r.get('concepto') or '').strip(),
@@ -1889,62 +1937,95 @@ def insert_gasto(r: dict, owner_override: str | None = None) -> int:
         'notas': str(r.get('notas') or '').strip(),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
-    sql = text("INSERT INTO gastos (fecha, concepto, valor, notas, owner) "
-               "VALUES (:fecha, :concepto, :valor, :notas, :owner)")
+    if DIALECT == "postgres":
+        sql_ins = text("""
+            INSERT INTO gastos (fecha, concepto, valor, notas, owner)
+            VALUES (:fecha, :concepto, :valor, :notas, :owner)
+            RETURNING id
+        """)
+    else:
+        sql_ins = text("""
+            INSERT INTO gastos (fecha, concepto, valor, notas, owner)
+            VALUES (:fecha, :concepto, :valor, :notas, :owner)
+        """)
+
     with get_conn() as conn:
-        cur = conn.execute(sql, payload)
-        row_id = cur.lastrowid
+        row_id = _insert_with_returning(conn, sql_ins, payload)
     audit("insert", table_name="gastos", row_id=row_id, after=payload)
-    return row_id
+    return int(row_id or 0)
+
 
 def insert_prestamo(r: dict, owner_override: str | None = None) -> int:
-    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'nombre': str(r.get('nombre') or '').strip(),
         'valor': _to_float(r.get('valor')),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
-    sql = text("INSERT INTO prestamos (nombre, valor, owner) "
-               "VALUES (:nombre, :valor, :owner)")
+    if DIALECT == "postgres":
+        sql_ins = text("""
+            INSERT INTO prestamos (nombre, valor, owner)
+            VALUES (:nombre, :valor, :owner)
+            RETURNING id
+        """)
+    else:
+        sql_ins = text("""
+            INSERT INTO prestamos (nombre, valor, owner)
+            VALUES (:nombre, :valor, :owner)
+        """)
+
     with get_conn() as conn:
-        cur = conn.execute(sql, payload)
-        row_id = cur.lastrowid
+        row_id = _insert_with_returning(conn, sql_ins, payload)
     audit("insert", table_name="prestamos", row_id=row_id, after=payload)
-    return row_id
+    return int(row_id or 0)
+
 
 def insert_inventario(r: dict, owner_override: str | None = None) -> int:
-    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         "producto": str(r.get("producto") or "").strip(),
         "valor_costo": _to_float(r.get("valor_costo")),
         "owner": (owner_override.strip() if owner_override else _row_owner()),
     }
-
-    sql = text("""
-        INSERT INTO inventario (producto, valor_costo, owner)
-        VALUES (:producto, :valor_costo, :owner)
-    """)
+    if DIALECT == "postgres":
+        sql_ins = text("""
+            INSERT INTO inventario (producto, valor_costo, owner)
+            VALUES (:producto, :valor_costo, :owner)
+            RETURNING id
+        """)
+    else:
+        sql_ins = text("""
+            INSERT INTO inventario (producto, valor_costo, owner)
+            VALUES (:producto, :valor_costo, :owner)
+        """)
 
     with get_conn() as conn:
-        cur = conn.execute(sql, payload)
-        row_id = cur.lastrowid
+        row_id = _insert_with_returning(conn, sql_ins, payload)
     audit("insert", table_name="inventario", row_id=row_id, after=payload)
-    return row_id
+    return int(row_id or 0)
+
 
 def insert_deudor_ini(r: dict, owner_override: str | None = None) -> int:
-    data = {**data, "owner": (_current_owner() or "")}
     payload = {
         'nombre': str(r.get('nombre') or '').strip(),
         'valor': _to_float(r.get('valor')),
         'owner': (owner_override.strip() if owner_override else _row_owner()),
     }
-    sql = text("INSERT INTO deudores_ini (nombre, valor, owner) "
-               "VALUES (:nombre, :valor, :owner)")
+    if DIALECT == "postgres":
+        sql_ins = text("""
+            INSERT INTO deudores_ini (nombre, valor, owner)
+            VALUES (:nombre, :valor, :owner)
+            RETURNING id
+        """)
+    else:
+        sql_ins = text("""
+            INSERT INTO deudores_ini (nombre, valor, owner)
+            VALUES (:nombre, :valor, :owner)
+        """)
+
     with get_conn() as conn:
-        cur = conn.execute(sql, payload)
-        row_id = cur.lastrowid
+        row_id = _insert_with_returning(conn, sql_ins, payload)
     audit("insert", table_name="deudores_ini", row_id=row_id, after=payload)
-    return row_id
+    return int(row_id or 0)
+
 
 def _fetch_row_as_dict(conn: sqlite3.Connection, table: str, row_id: int) -> dict | None:
     cur = conn.execute(f"SELECT * FROM {table} WHERE id=?", (int(row_id),))
@@ -1954,11 +2035,13 @@ def _fetch_row_as_dict(conn: sqlite3.Connection, table: str, row_id: int) -> dic
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, r))
 
+
 def delete_venta_id(row_id: int):
     view_all = _view_all_enabled()
     where = "id = :id" + ("" if view_all else " AND owner = :owner")
     params = {"id": int(row_id)}
-    if not view_all: params["owner"] = _current_owner()
+    if not view_all:
+        params["owner"] = _current_owner()
 
     with get_conn() as conn:
         cur = conn.execute(text(f"SELECT * FROM transacciones WHERE {where}"), params)
@@ -1966,8 +2049,10 @@ def delete_venta_id(row_id: int):
         before = dict(m) if m else None
         conn.execute(text(f"DELETE FROM transacciones WHERE {where}"), params)
 
-    try: audit("delete", table_name="transacciones", row_id=int(row_id), before=before)
-    except Exception: pass
+    try:
+        audit("delete", table_name="transacciones", row_id=int(row_id), before=before)
+    except Exception:
+        pass
 
 
 def delete_gasto_id(row_id: int):
@@ -1980,6 +2065,7 @@ def delete_prestamo_id(row_id: int):
 
 def delete_inventario_id(row_id: int):
     soft_delete_row("inventario", int(row_id))
+
 
 def update_venta_fields(row_id: int, **payload):
     # Normaliza numéricos si llegan como "3.000,00"
@@ -2008,7 +2094,6 @@ def update_prestamo_fields(row_id: int, **payload):
 
     _update_row("prestamos", row_id, payload)
     audit("update", table_name="prestamos", row_id=row_id, after=payload)
-
 
 
 def update_inventario_fields(row_id: int, **payload):
@@ -2072,9 +2157,8 @@ def show_flash_if_any():
     st.success(msg)
 
 
-
 def currency_input(label: str, key: str, value: float = 0.0,
-                help: str | None = None, in_form: bool = False, live: bool = True) -> float:
+                   help: str | None = None, in_form: bool = False, live: bool = True) -> float:
     """
     Campo moneda: miles '.' y decimales ',' (0–2).
     En formularios (`in_form=True`) NO escribe en session_state (solo lee).
@@ -2170,7 +2254,7 @@ def currency_input(label: str, key: str, value: float = 0.0,
 
     # ---- Resultado numérico robusto ----
     def _parse_pesos(cell) -> float:
-        import numpy as np
+        import numpy as np, re
         if cell is None: return 0.0
         s = str(cell).strip()
         if not s: return 0.0
@@ -2239,8 +2323,10 @@ def filtro_busqueda(df: pd.DataFrame, cols: list[str], key: str):
         patt = texto.strip().upper()
         mask = False
         for c in cols:
-            mask = mask | df2[c].astype(str).str.upper().str.contains(patt, na=False)
-        df2 = df2[mask]
+            if c in df2.columns:
+                mask = mask | df2[c].astype(str).str.upper().str.contains(patt, na=False)
+        if isinstance(mask, pd.Series):
+            df2 = df2[mask]
     if isinstance(fecha_rango, tuple) and len(fecha_rango)==2 and "fecha" in df2:
         f0, f1 = fecha_rango
         df2 = df2[(df2["fecha"]>=f0) & (df2["fecha"]<=f1)]
@@ -2257,8 +2343,10 @@ def aplicar_filtros_guardados(df: pd.DataFrame, cols: list[str], key: str) -> pd
         patt = str(texto).strip().upper()
         mask = False
         for c in cols:
-            mask = mask | out[c].astype(str).str.upper().str.contains(patt, na=False)
-        out = out[mask]
+            if c in out.columns:
+                mask = mask | out[c].astype(str).str.upper().str.contains(patt, na=False)
+        if isinstance(mask, pd.Series):
+            out = out[mask]
 
     if isinstance(fecha_rango, tuple) and len(fecha_rango) == 2 and "fecha" in out:
         f0, f1 = fecha_rango
@@ -2329,6 +2417,13 @@ def _get_logo_uri(preferred: str | None = None) -> str | None:
     st.session_state["logo_uri_sig"] = sig
     return uri
 
+def _clean_title(s: str) -> str:
+    """Normaliza el título sin efectos visuales (placeholder que usabas)."""
+    try:
+        return str(s or "").strip()
+    except Exception:
+        return ""
+
 def show_logo_over_title(username: str, logo_path: str | None = None):
     """Pequeño logo + usuario sobre el título de la página (no flotante)."""
     uri = _img_to_data_uri(logo_path or _guess_logo_path())
@@ -2351,13 +2446,13 @@ def show_logo_over_title(username: str, logo_path: str | None = None):
     else:
         st.markdown(f'<div class="brand-top"><span class="u">{username}</span></div>',
                     unsafe_allow_html=True)
-        
+
 def show_sticky_header(title_text: str,
-                    logo_path: str | None = None,
-                    show_brand_text: bool = False,
-                    fixed: bool = False,
-                    warn_if_missing: bool = True,
-                    username: str | None = None):
+                       logo_path: str | None = None,
+                       show_brand_text: bool = False,
+                       fixed: bool = False,
+                       warn_if_missing: bool = True,
+                       username: str | None = None):
     user_html = f'<div class="r"><span class="tt-user">👤 {username}</span></div>' if username else '<div class="r"></div>'
     st.markdown(
         f'''
@@ -2567,6 +2662,8 @@ def sync_tables_to_gsheet(tables: list[str]):
     if not GSPREADSHEET_ID:
         st.warning("Configura el Google Sheet ID en Administración antes de sincronizar.")
         return
+    if not tables:
+        return  # defensivo: nada que sincronizar
     for t in tables:
         try:
             ws_name = GSHEET_MAP.get(t)   # <- usa la constante global
@@ -2604,7 +2701,7 @@ def _db_is_completely_empty() -> bool:
     with get_conn() as conn:
         for t in tables:
             try:
-                total += int(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0])
+                total += int(conn.execute(text(f"SELECT COUNT(*) FROM {t}")).fetchone()[0])
             except Exception:
                 pass
     return total == 0
@@ -2780,9 +2877,14 @@ def auto_backup_if_due():
 # =========================================================
 # Importación TODO-EN-UNO desde Excel
 # =========================================================
+from pathlib import Path  # usado más abajo para _show_logo_path
+import re                 # usado en _slug_user
+
 def _truncate_tables(tables: list[str]):
     # Seguridad: la tabla de usuarios jamás se toca aquí.
     assert "users" not in tables, "Seguridad: no se puede truncar la tabla 'users'."
+    if not tables:
+        return
     with get_conn() as conn:
         if DIALECT == "postgres":
             # Neon/Postgres: rápido y reinicia autoincrementos
@@ -2791,84 +2893,6 @@ def _truncate_tables(tables: list[str]):
             # SQLite fallback
             for t in tables:
                 conn.execute(text(f"DELETE FROM {t}"))
-
-def _insert_many(table: str, df: pd.DataFrame) -> int:
-    n = 0
-    if df is None or df.empty:
-        return 0
-    for _, row in df.iterrows():
-        r = row.to_dict()
-        if table == "transacciones":
-            insert_venta(r)
-        elif table == "gastos":
-            insert_gasto(r)
-        elif table == "prestamos":
-            insert_prestamo(r)
-        elif table == "inventario":
-            insert_inventario(r)
-        elif table == "deudores_ini":
-            insert_deudor_ini(r)
-        n += 1
-    return n
-
-def import_excel_all(xls_file, replace: bool = False) -> dict:
-    """
-    Carga HOJAS conocidas de un .xlsx:
-    - Ventas, Gastos, Prestamos, Inventario
-    - DeudoresIniciales desde hoja 'Consolidado' (cols E/F)
-    """
-    xls = pd.ExcelFile(xls_file)
-    if replace:
-        _truncate_tables(["transacciones","gastos","prestamos","inventario","deudores_ini"])
-
-    stats = {}
-
-    # Ventas
-    try:
-        v_raw = pd.read_excel(xls, sheet_name="Ventas")
-        v = normalize_ventas(v_raw)
-        stats["ventas"] = _insert_many("transacciones", v)
-    except Exception:
-        stats["ventas"] = 0
-
-    # Gastos
-    try:
-        g_raw = pd.read_excel(xls, sheet_name="Gastos")
-        g = normalize_gastos(g_raw)
-        stats["gastos"] = _insert_many("gastos", g)
-    except Exception:
-        stats["gastos"] = 0
-
-    # Prestamos
-    try:
-        p_raw = pd.read_excel(xls, sheet_name="Prestamos")
-        p = normalize_prestamos(p_raw)
-        stats["prestamos"] = _insert_many("prestamos", p)
-    except Exception:
-        stats["prestamos"] = 0
-
-    # Inventario
-    try:
-        i_raw = pd.read_excel(xls, sheet_name="Inventario")
-        i = normalize_inventario(i_raw)
-        stats["inventario"] = _insert_many("inventario", i)
-    except Exception:
-        stats["inventario"] = 0
-
-    # DeudoresIniciales desde 'Consolidado' (col E = nombre, col F = valor)
-    try:
-        ddf = extract_deudores_ini_from_xls(xls, "Consolidado")
-        stats["deudores_ini"] = _insert_many("deudores_ini", ddf)
-    except Exception:
-        stats["deudores_ini"] = 0
-
-    try:
-        fname = getattr(xls_file, "name", None)
-    except Exception:
-        fname = None
-    audit("import.xlsx", table_name="*", extra={"filename": fname, "replace": bool(replace), "stats": stats})
-    return stats
-
 
 def _insert_many(table: str, df: pd.DataFrame) -> int:
     """
@@ -2880,7 +2904,6 @@ def _insert_many(table: str, df: pd.DataFrame) -> int:
     if df is None or df.empty:
         return 0
 
-    # Mapa de funciones y whitelist
     insert_map = {
         "transacciones": insert_venta,
         "gastos":        insert_gasto,
@@ -2898,7 +2921,6 @@ def _insert_many(table: str, df: pd.DataFrame) -> int:
             fn(row.to_dict())
             ok += 1
         except Exception as e:
-            # Auditoría por fila fallida, pero no detenemos la importación
             audit("import.row_error", table_name=table, row_id=None, extra={
                 "row_index": int(idx),
                 "error": str(e),
@@ -2918,7 +2940,6 @@ def import_excel_all(xls_file, replace: bool = False) -> dict:
     errors: dict[str, str] = {}
 
     if replace:
-        # Solo tablas de negocio involucradas en esta importación
         _truncate_tables(["transacciones", "gastos", "prestamos", "inventario", "deudores_ini"])
 
     # Abrimos el Excel con context manager (cierra siempre)
@@ -3065,7 +3086,7 @@ def backup_user_snapshot(username: str):
     if not GOOGLE_SHEETS_ENABLED:
         st.warning("Google Sheets está deshabilitado en Administración."); return
 
-    sh, slug = _gs_open_or_create_user_book(username)   # ← FALTABA
+    sh, slug = _gs_open_or_create_user_book(username)
 
     tablas = {
         "Ventas":              _read_table_direct("transacciones"),
@@ -3078,13 +3099,6 @@ def backup_user_snapshot(username: str):
 
     for nombre, df in tablas.items():
         _ws_write(_ws(sh, nombre), df)
-
-    # with get_conn() as conn:
-    #     df_a = pd.read_sql_query(
-    #         "SELECT id, ts, action, table_name AS tabla, row_id FROM audit_log WHERE user=? ORDER BY id DESC LIMIT 200",
-    #         conn, params=(username,)
-    #     )
-    #_ws_write(_ws(sh, "Estado", rows=200, cols=10), df_a)
 
     audit("user.backup.snapshot", extra={"user": username})
 
@@ -3150,7 +3164,7 @@ def backup_user_flush_audit(username: str) -> int:
 user, role = require_user()
 
 with st.sidebar:
-        # Ejecuta el backup automático sólo cuando ya hay sesión iniciada
+    # Ejecuta el backup automático sólo cuando ya hay sesión iniciada
     try:
         auto_backup_if_due()
     except Exception as e:
@@ -3170,17 +3184,10 @@ with st.sidebar:
         """, unsafe_allow_html=True)
         st.markdown(f'<div class="sb-logo"><img src="{_logo_uri}" alt="logo"></div>', unsafe_allow_html=True)
 
-                
-# Muestra badge (logo + usuario). Si tu archivo se llama distinto, pásalo:
-# show_user_badge(user, logo_path="assets/ticketo.png", warn_if_missing=True)
-# show_user_badge(user, logo_path="logo.png", warn_if_missing=True)
-
 # =========================================================
 # Menú en la sidebar (reemplaza tabs)
 # =========================================================
 
-# ===================== NAV + HEADER =====================
-# (Estilo del menú en la sidebar)
 with st.sidebar:
     st.markdown("""
 <style>
@@ -3222,22 +3229,19 @@ background:#eef2ff !important;
 border-color:#4f46e5 !important;
 box-shadow:0 0 0 2px rgba(79,70,229,.18) inset;
 }
-                
+
 /* Oculta el control nativo si aparece */
 section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="radio"]{ display:none !important; }
-                
 </style>
 """, unsafe_allow_html=True)
-    
-# ÚNICO radio de navegación (key única y persistente)
-# Construye la lista de tabs (agrega Admin si aplica)
+
+# Tabs (agrega Admin si aplica)
 tabs = [
-    
     "🧮 Diario Consolidado", "🧾 Ventas",
     "💸 Gastos", "🤝 Préstamos", "📦 Inventario", "👤 Deudores", "⬆️ Importar/Exportar", "⚙️ Mi Cuenta"
 ] + (["🛠️ Administración"] if is_admin() else [])
 
-# === Auto-compact y flag móvil por parámetros de URL ===
+# Auto-compact y flag móvil por parámetros de URL
 qp = st.query_params
 if qp.get("compact") == "1":
     st.session_state["ui_compact"] = True
@@ -3245,131 +3249,35 @@ if qp.get("m") == "1":
     st.session_state["is_mobile"] = True
 
 with st.sidebar:
-    # valor inicial SOLO la primera vez
     if "nav_left" not in st.session_state:
         st.session_state["nav_left"] = tabs[0]
 
-    _prev_nav = st.session_state["nav_left"]   # ← NUEVO: guardo valor previo
+    _prev_nav = st.session_state["nav_left"]
 
-    # ⬇️⬇️ NUEVO: switch de modo compacto en la sidebar
     compact = st.toggle("🧩 Modo compacto", value=st.session_state.get("ui_compact", False), key="ui_compact")
-    st.divider()  # opcional, solo para separar visualmente
+    st.divider()
 
     if is_admin():
         st.session_state.setdefault("admin_view_all", False)
         st.session_state["admin_view_all"] = st.toggle("👁️ Ver todo (admin)", value=st.session_state["admin_view_all"])
 
-    # Navegación
-    st.radio(
-        "Secciones",
-        tabs,
-        label_visibility="collapsed",
-        key="nav_left",
-    )
+    st.radio("Secciones", tabs, label_visibility="collapsed", key="nav_left")
 
 current = st.session_state["nav_left"]
 
-SHOW_QUICK_ACTIONS = False 
-
-# st.markdown("""
-# <style>
-# @media (max-width: 900px){
-#   /* Sidebar más angosta y oculta por defecto (se abre con data-tt-open="1") */
-#   section[data-testid='stSidebar']{
-#     width: 68vw !important;
-#     min-width: 260px !important;
-#     max-width: 420px !important;
-#     transition: transform .25s ease, visibility .25s ease !important;
-#     transform: translateX(-110%);
-#     visibility: hidden;
-#     z-index: 2000 !important;
-#   }
-#   section[data-testid='stSidebar'][data-tt-open='1']{
-#     transform: translateX(0) !important;
-#     visibility: visible !important;
-#   }
-
-#   /* Oculta el control nativo en móvil (dejamos solo nuestro burger) */
-#   [data-testid='stSidebarCollapseControl'],
-#   [data-testid='collapsedControl']{
-#     display:none !important;
-#   }
-
-#   /* Botón hamburguesa naranja (fuera de la sidebar) */
-#   #tt-burger{
-#     position: fixed;
-#     top: 14px; left: 14px;
-#     width: 52px; height: 52px;
-#     border: 0; border-radius: 999px;
-#     background: linear-gradient(135deg,#f97316,#f59e0b);
-#     box-shadow: 0 10px 24px rgba(0,0,0,.18);
-#     cursor: pointer; z-index: 2100;
-#   }
-#   #tt-burger span{
-#     display:block; width:22px; height:3px; background:#fff; border-radius:2px;
-#     margin:4px auto;
-#     box-shadow: 0 1px 0 rgba(0,0,0,.08);
-#   }
-
-#   /* Overlay cuando la sidebar está abierta */
-#   #tt-ov{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1999; }
-# }
-# </style>
-# """, unsafe_allow_html=True)
-
-# ⬇️⬇️ NUEVO: CSS si está activo el modo compacto
-if st.session_state.get("ui_compact", False):
-    st.markdown("""
-    <style>
-    html, body, [data-testid="stSidebar"]{ font-size: 14px; }
-    [data-testid="stMetric"] small{ display:none; }  /* oculta subtexto de métricas */
-    .tt-titlebar .ttl{ font-size:22px !important; } /* reduce título fijo */
-    /* Opcional: achica pastillas del menú lateral un poquito */
-    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
-        padding:8px 10px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-if st.session_state.get("ui_compact", False):
-    st.markdown("""
-    <style>
-    @media (max-width: 900px){
-        .stButton > button{ min-height: 40px; font-size: 15px; }
-        [data-testid="stMetric"]{ padding:12px 12px; }
-        /* Reduce el gap entre controles en columnas pequeñas */
-        .stColumn > div{ padding-top: 2px; padding-bottom: 2px; }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-if st.session_state.get("ui_compact", False):
-    st.markdown("""
-    <style>
-    /* En móvil: permitir wrap en celdas para evitar scroll lateral infinito */
-    @media (max-width: 900px){
-        [data-testid="stDataFrame"] table td,
-        [data-testid="stDataFrame"] table th{
-        white-space: normal !important;
-        word-break: break-word !important;
-        }
-        [data-testid="stDataFrame"] { height: 420px !important; }
-    }
-    </style>
-    """, unsafe_allow_html=True)
+SHOW_QUICK_ACTIONS = False
 
 def _clean_title(raw: str) -> str:
     return raw.split(" ", 1)[1] if " " in raw else raw
 
-# (lo demás igual)
 st.session_state.pop("logo_uri_cache", None)
 st.session_state.pop("logo_uri_sig", None)
 
 _show_logo_path = str(Path(__file__).parent / "logo.png")
 
+# ===== DARK MODE OVERRIDES =====
 st.markdown("""
 <style>
-/* ===== DARK MODE OVERRIDES (debe ir DESPUÉS del CSS claro) ===== */
 @media (prefers-color-scheme: dark){
 
 :root{
@@ -3438,42 +3346,31 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label > input[type="ra
 </style>
 """, unsafe_allow_html=True)
 
+# Zebra + fixes en dark
 st.markdown("""
 <style>
 @media (prefers-color-scheme: dark){
-
-/* DataFrame: zebra par + color de texto en celdas */
 [data-testid="stDataFrame"] table tbody tr:nth-child(even){
     background:#0b1220 !important;
 }
 [data-testid="stDataFrame"] table td{
     color: var(--text) !important;
 }
-
-/* Métricas: valor grande y delta legibles */
 [data-testid="stMetric"] [data-testid="stMetricValue"],
 [data-testid="stMetric"] [data-testid="stMetricDelta"]{
     color: var(--text) !important;
 }
-
-/* Pastillas de la sidebar: asegura color del texto */
 section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child{
     color: var(--text) !important;
 }
-
-/* Popover/Expander: texto consistente */
 [data-testid="stExpander"] *,
 [data-testid="stPopoverBody"] *{
     color: var(--text) !important;
 }
-
-/* Badge de usuario (arriba derecha) en tono oscuro */
 .app-user-badge{
-    background: rgba(17,24,39,.88) !important;  /* similar a --card-bg con blur */
+    background: rgba(17,24,39,.88) !important;
     border-color: var(--card-border) !important;
 }
-
-/* Línea bajo el logo de la sidebar en oscuro */
 .sb-logo{
     border-bottom:1px solid var(--card-border) !important;
 }
@@ -3481,73 +3378,32 @@ section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:last-child
 </style>
 """, unsafe_allow_html=True)
 
+# Fixes varios de layout
 st.markdown("""
 <style>
-# /* ========= BOTÓN HAMBURGUESA — NARANJA ========= */
-# [data-testid="stSidebarCollapseControl"] button,
-# [data-testid="collapsedControl"]{
-#   width: 46px !important;
-#   height: 46px !important;
-#   border-radius: 999px !important;
-#   background: linear-gradient(135deg,#f97316,#fb923c) !important; /* 🟧 naranja → naranja claro */
-#   border: 0 !important;
-#   padding: 0 !important;
-#   display: flex !important;
-#   align-items: center !important;
-#   justify-content: center !important;
-#   position: relative !important;
-#   box-shadow: 0 6px 16px rgba(249,115,22,.35), 0 2px 4px rgba(0,0,0,.16) !important; /* sombras naranjas */
-#   transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
-#   z-index: 2000 !important;
-#   cursor: pointer;
-# }
-
-/* 3 barras blancas centradas */
-[data-testid="stSidebarCollapseControl"] button::before,
-[data-testid="collapsedControl"]::before{
-content:"";
-position: absolute;
-top: 50%; left: 50%;
-transform: translate(-50%, -50%);
-width: 22px; height: 2px;
-background:#fff; border-radius: 2px;
-box-shadow: 0 -6px 0 0 #fff, 0  6px 0 0 #fff;
+/* FIX: colapsar wrappers vacíos que deja components.html cuando height=0 */
+.block-container > div:has(> iframe[height="0"]:only-child),
+.block-container > div:has(> iframe[style*="height:0"]:only-child),
+[data-testid="stElementContainer"]:has(> iframe[height="0"]:only-child),
+div[data-testid="stIFrame"]:has(> iframe[height="0"]:only-child){
+margin:0 !important;
+padding:0 !important;
+min-height:0 !important;
+line-height:0 !important;
 }
 
-[data-testid="stSidebarCollapseControl"] button:hover,
-[data-testid="collapsedControl"]:hover{
-transform: translateY(-1px) scale(1.04);
+/* Anti-espacio arriba manteniendo toolbar */
+div[data-testid="stDecoration"]{ height:0 !important; }
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stAppViewContainer"] > .main .block-container{
+padding-top:0 !important;
+margin-top:0 !important;
 }
+.block-container h1:first-child,
+.block-container h2:first-child{ margin-top:0 !important; }
+.tt-titlebar{ margin-top:0 !important; top:0 !important; }
 
-/* Efecto pulse cuando está colapsado — tono naranja */
-@keyframes tt-pulse {
-0%   { box-shadow: 0 0 0 0 rgba(249,115,22,.55); }
-70%  { box-shadow: 0 0 0 14px rgba(249,115,22,0); }
-100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
-}
-[data-testid="collapsedControl"]{
-animation: tt-pulse 2.2s ease-out infinite;
-}
-
-/* ========= SIDEBAR MÁS ANGOSTA EN MÓVIL ========= */
-@media (max-width: 900px){
-section[data-testid="stSidebar"]{
-    width: 232px !important;
-    min-width: 232px !important;
-}
-[data-testid="stSidebarCollapseControl"]{
-    top: 8px !important;
-    left: 8px !important;
-}
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* === FIX FINAL: fuerza que el toggle de la sidebar exista y sea visible === */
-
-/* Móvil: NO lo ocultes (anula cualquier regla previa que lo esconda) */
+/* Forzar visibilidad del toggle de sidebar en móvil */
 @media (max-width:900px){
 [data-testid*="SidebarCollapse"],
 [data-testid*="SidebarCollapse"] *,
@@ -3560,51 +3416,8 @@ st.markdown("""
     opacity:1 !important;
 }
 }
-</style>
-""", unsafe_allow_html=True)
 
-st.markdown("""
-<style>
-/* FIX: colapsar wrappers vacíos que deja components.html cuando height=0 */
-/* Cubre varios contenedores de Streamlit y distintas formas en que se pinta el height */
-.block-container > div:has(> iframe[height="0"]:only-child),
-.block-container > div:has(> iframe[style*="height:0"]:only-child),
-[data-testid="stElementContainer"]:has(> iframe[height="0"]:only-child),
-div[data-testid="stIFrame"]:has(> iframe[height="0"]:only-child){
-margin:0 !important;
-padding:0 !important;
-min-height:0 !important;
-line-height:0 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* ——— Anti-espacio arriba (versión que mantiene el toolbar) ——— */
-
-/* 0) Quita la banda de color */
-div[data-testid="stDecoration"]{ height:0 !important; }
-
-/* 1) Sin padding/margen arriba en el contenedor principal */
-[data-testid="stAppViewContainer"] > .main,
-[data-testid="stAppViewContainer"] > .main .block-container{
-padding-top:0 !important;
-margin-top:0 !important;
-}
-
-/* 3) H1/H2 al ras cuando son lo primero */
-.block-container h1:first-child,
-.block-container h2:first-child{ margin-top:0 !important; }
-
-/* 4) Si usas barra de título propia, que no agregue margen extra */
-.tt-titlebar{ margin-top:0 !important; top:0 !important; }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-/* Colapsa cualquier wrapper que contenga solo utilidades invisibles */
+/* Colapsa wrappers de utilidades invisibles extra */
 .block-container > div:has(> style),
 .block-container > div:has(> iframe[height="0"]),
 .block-container > div:has(> iframe[style*="height:0"]),
@@ -3612,7 +3425,6 @@ st.markdown("""
 div[data-testid="stIFrame"]:has(> iframe[height="0"]){
 margin:0 !important; padding:0 !important; min-height:0 !important; line-height:0 !important;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
