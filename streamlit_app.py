@@ -1030,8 +1030,6 @@ def _boot_db_once():
     migrate_add_deleted_at()   # 👈 nuevo
     return True
 
-_BOOT = _boot_db_once()
-
 
 def _table_cols(conn, table: str) -> set[str]:
     if DIALECT == "sqlite":
@@ -1094,6 +1092,10 @@ def migrate_to_per_user_data():
 
     except Exception as e:
         st.warning(f"⚠️ Migración per-user falló: {e}")
+
+if "_boot_ok" not in st.session_state:
+    _BOOT = _boot_db_once()
+    st.session_state["_boot_ok"] = True
 
 
 import os, streamlit as st, urllib.parse as _u
