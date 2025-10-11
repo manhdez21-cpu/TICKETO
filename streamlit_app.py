@@ -3917,29 +3917,52 @@ if show("🧮 Diario Consolidado"):
     # Efectivo global actual y métrica superior
     efectivo_ini, _ = get_efectivo_global_now()
     metric_box = st.empty()
-    metric_box.metric("EFECTIVO", money(efectivo_ini))
+    
+    total_capital = float(total_deu + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
 
     # === Tarjetas alineadas (no ocultar ceros) ===
     items = [
-        {"title": "Total ventas",      "value": total_ventas,     "fmt": money},
-        {"title": "Gastos totales",    "value": total_gastos,     "fmt": money},
-        {"title": "Costos totales",    "value": total_costos,     "fmt": money},
-        {"title": "Ganancia total",    "value": total_ganancia,   "fmt": money},  # ← ahora se usa
-        {"title": "Total préstamos",   "value": total_prestamos,  "fmt": money},
-        {"title": "Inventario total",  "value": total_inventario, "fmt": money},
-        {"title": "Deudores totales",  "value": total_deu,        "fmt": money},
+        {"title": "Total de capital",  "value": total_capital,   "fmt": money},  # ← PRIMERO
+        {"title": "Total ventas",      "value": total_ventas,    "fmt": money},
+        {"title": "Gastos totales",    "value": total_gastos,    "fmt": money},
+        {"title": "Costos totales",    "value": total_costos,    "fmt": money},
+        {"title": "Ganancia total",    "value": total_ganancia,  "fmt": money},
+        {"title": "Total préstamos",   "value": total_prestamos, "fmt": money},
+        {"title": "Inventario total",  "value": total_inventario,"fmt": money},
+        {"title": "Deudores totales",  "value": total_deu,       "fmt": money},
     ]
     render_stat_cards(items, hide_empty=True, hide_zero=False)
+
+    metric_box.metric("EFECTIVO", money(efectivo_ini))
 
     # Layout 2:1 (solo usamos la izquierda; derecha queda vacía)
     colL, _ = st.columns([2, 1], gap="small")
 
     with colL:
+        st.markdown("""
+        <style>
+        #efectivo-manual input{
+        font-size:22px !important;
+        min-height:52px !important;
+        padding:10px 12px !important;
+        }
+        #efectivo-manual label{
+        font-size:12px !important;
+        letter-spacing:.06em;
+        text-transform:uppercase;
+        color:#6b7280;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        st.markdown('<div id="efectivo-manual">', unsafe_allow_html=True)
         CONS_efectivo = currency_input(
             "Efectivo en caja",
             key="CONS_efectivo_input",
             value=float(efectivo_ini)
         )
+        st.markdown('</div>', unsafe_allow_html=True)
+
         if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True, key="CONS_efectivo_save"):
             # Reemplazo automático: primero borro, luego inserto/actualizo
             delete_consolidado("GLOBAL")
@@ -3953,18 +3976,7 @@ if show("🧮 Diario Consolidado"):
                 height=0, width=0
             )
             finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
-
-    # ===== Total de capital (minimal) =====
-    total_capital = float(total_deu + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
-    st.markdown(
-        f'''
-        <div class="mm-card">
-            <h4>Total de capital</h4>
-            <div class="mm-total">{money(total_capital)}</div>
-        </div>
-        ''',
-        unsafe_allow_html=True
-    )
+    
 
 # ---------------------------------------------------------
 # Ventas
