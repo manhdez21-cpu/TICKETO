@@ -48,8 +48,10 @@ st.markdown("""
 
 def render_stat_cards(items, hide_empty=True, hide_zero=False):
     def _ok(v):
-        if v is None or v == "": return False
-        if hide_zero and (isinstance(v, (int, float)) and float(v) == 0.0): return False
+        if v is None or v == "":
+            return False
+        if hide_zero and (isinstance(v, (int, float)) and float(v) == 0.0):
+            return False
         return True
 
     clean = []
@@ -59,19 +61,28 @@ def render_stat_cards(items, hide_empty=True, hide_zero=False):
         if hide_empty and (not title or not _ok(val)):
             continue
         fmt = it.get("fmt")
-        s = fmt(val) if callable(fmt) else (f"{val:,}" if isinstance(val, (int,float)) else str(val))
+        s = fmt(val) if callable(fmt) else (f"{val:,}" if isinstance(val, (int, float)) else str(val))
         clean.append((title, s))
 
     if not clean:
         return
 
+    # Grid contenedor
     st.markdown('<div class="stat-grid">', unsafe_allow_html=True)
-    for title, sval in clean:
+
+    # 🔹 Agregamos clase especial "stat-featured" SOLO a la primera tarjeta
+    for i, (title, sval) in enumerate(clean):
+        featured_class = " stat-featured" if i == 0 else ""   # ← NUEVO
         st.markdown(
-            f'<div class="stat-card"><div class="stat-title">{title}</div>'
-            f'<div class="stat-value">{sval}</div></div>',
+            f'''
+            <div class="stat-card{featured_class}">
+              <div class="stat-title">{title}</div>
+              <div class="stat-value">{sval}</div>
+            </div>
+            ''',
             unsafe_allow_html=True
         )
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -3933,28 +3944,32 @@ if show("🧮 Diario Consolidado"):
     ]
     render_stat_cards(items, hide_empty=True, hide_zero=False)
 
-    # 💅 Resaltar la tarjeta "Total de capital"
     st.markdown("""
     <style>
-    div[data-testid="stHorizontalBlock"] > div:first-child div[data-testid="stMetricValue"] {
-        font-size: 2rem !important;
-        color: #0a3069 !important;
-        font-weight: 700 !important;
+    /* Estilo base de tus tarjetas (no lo toco si ya lo tienes) */
+    /* .stat-grid { display:grid; gap:12px; } */
+    /* .stat-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:14px 16px; } */
+    /* .stat-title { font-size:.75rem; letter-spacing:.06em; text-transform:uppercase; color:#6b7280; } */
+    /* .stat-value { font-size:1.25rem; font-weight:600; color:#111827; } */
+
+    /* ⭐ Destacado SOLO para la primera tarjeta ("Total de capital") */
+    .stat-card.stat-featured{
+    background: linear-gradient(135deg, #f0f7ff, #d9eaff);
+    border: 2px solid #0a3069 !important;
+    border-radius: 18px !important;
+    box-shadow: 0 0 10px rgba(10,48,105,0.18);
     }
-    div[data-testid="stHorizontalBlock"] > div:first-child div[data-testid="stMetricLabel"] {
-        color: #0a3069 !important;
-        font-weight: 700 !important;
-        letter-spacing: .05em;
+    .stat-card.stat-featured .stat-title{
+    color:#0a3069 !important;
+    font-weight:700 !important;
     }
-    div[data-testid="stHorizontalBlock"] > div:first-child {
-        background: linear-gradient(135deg, #f0f7ff, #d9eaff);
-        border: 2px solid #0a3069 !important;
-        border-radius: 18px !important;
-        box-shadow: 0 0 6px rgba(10,48,105,0.2);
+    .stat-card.stat-featured .stat-value{
+    color:#0a3069 !important;
+    font-weight:800 !important;
+    font-size:2rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
-
 
     metric_box = st.empty()
     metric_box.metric("EFECTIVO", money(efectivo_ini))
