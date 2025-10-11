@@ -3916,7 +3916,7 @@ if show("🧮 Diario Consolidado"):
 
     # Efectivo global actual y métrica superior
     efectivo_ini, _ = get_efectivo_global_now()
-    metric_box = st.empty()
+    
     
     total_capital = float(total_deu + efectivo_ini + total_prestamos + total_inventario + total_deudores_ini)
 
@@ -3932,6 +3932,8 @@ if show("🧮 Diario Consolidado"):
         {"title": "Deudores totales",  "value": total_deu,       "fmt": money},
     ]
     render_stat_cards(items, hide_empty=True, hide_zero=False)
+
+    metric_box = st.empty()
 
     metric_box.metric("EFECTIVO", money(efectivo_ini))
 
