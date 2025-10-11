@@ -67,12 +67,9 @@ def render_stat_cards(items, hide_empty=True, hide_zero=False):
     if not clean:
         return
 
-    # Grid contenedor
     st.markdown('<div class="stat-grid">', unsafe_allow_html=True)
-
-    # 🔹 Agregamos clase especial "stat-featured" SOLO a la primera tarjeta
     for i, (title, sval) in enumerate(clean):
-        featured_class = " stat-featured" if i == 0 else ""   # ← NUEVO
+        featured_class = " stat-featured" if i == 0 else ""
         st.markdown(
             f'''
             <div class="stat-card{featured_class}">
@@ -82,7 +79,6 @@ def render_stat_cards(items, hide_empty=True, hide_zero=False):
             ''',
             unsafe_allow_html=True
         )
-
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -3889,6 +3885,16 @@ def show(section: str) -> bool:
 # ---------------------------------------------------------
 # Diario consolidado
 # ---------------------------------------------------------
+
+st.markdown("""
+<div style='display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;margin-top:-0.5rem;'>
+  <div style='background:#1565c0;color:white;padding:6px 12px;border-radius:8px;font-weight:700;font-size:15px;box-shadow:0 2px 4px rgba(0,0,0,0.15);'>
+    🧮 Diario Consolidado
+  </div>
+  <div style='height:2px;flex:1;background:linear-gradient(to right,#1565c0,#64b5f6,#fff);'></div>
+</div>
+""", unsafe_allow_html=True)
+
 if show("🧮 Diario Consolidado"):
     # Lee dataframes (suponiendo que ya filtran eliminados lógicamente)
     v_df = read_ventas()
@@ -3946,6 +3952,68 @@ if show("🧮 Diario Consolidado"):
 
     st.markdown("""
     <style>
+
+    /* === GRID GENERAL === */
+    .stat-grid{
+    display:grid;
+    gap:12px;
+    }
+    .stat-card{
+    background:#ffffff;
+    border:1px solid #e5e7eb;
+    border-radius:16px;
+    padding:16px 20px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.04);
+    transition:all 0.2s ease;
+    }
+    .stat-card:hover{
+    transform:scale(1.01);
+    box-shadow:0 4px 10px rgba(0,0,0,0.08);
+    }
+    .stat-title{
+    font-size:0.8rem;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:#6b7280;
+    }
+    .stat-value{
+    font-size:1.25rem;
+    font-weight:600;
+    color:#111827;
+    }
+
+    /* === DESTACADO (Total de capital) === */
+    .stat-card.stat-featured{
+    background:linear-gradient(135deg,#e3f2fd,#bbdefb);
+    border:2px solid #1565c0 !important;
+    box-shadow:0 0 10px rgba(21,101,192,0.25);
+    transform:scale(1.02);
+    }
+    .stat-card.stat-featured .stat-title{
+    color:#0a3069 !important;
+    font-weight:700 !important;
+    }
+    .stat-card.stat-featured .stat-value{
+    color:#0a3069 !important;
+    font-weight:800 !important;
+    font-size:2rem !important;
+    }
+
+    /* === RESPONSIVIDAD === */
+    @media (max-width:900px){
+    .stat-grid{grid-template-columns:1fr !important;}
+    .stat-card{padding:10px 12px !important;}
+    .stat-card.stat-featured .stat-value{font-size:1.6rem !important;}
+    }
+
+    /* === ANIMACIÓN LIGERA === */
+    .stat-card{opacity:0;animation:fadeIn 0.8s ease forwards;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <style>
     /* Estilo base de tus tarjetas (no lo toco si ya lo tienes) */
     /* .stat-grid { display:grid; gap:12px; } */
     /* .stat-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:14px 16px; } */
@@ -3977,6 +4045,8 @@ if show("🧮 Diario Consolidado"):
     # Layout 2:1 (solo usamos la izquierda; derecha queda vacía)
     colL, _ = st.columns([2, 1], gap="small")
 
+
+
     with colL:
         st.markdown("""
         <style>
@@ -3994,6 +4064,38 @@ if show("🧮 Diario Consolidado"):
         </style>
         """, unsafe_allow_html=True)
 
+        with colL:
+            # === PASO 5: estilos del contenedor + input de efectivo ===
+            st.markdown("""
+            <style>
+            #efectivo-manual {
+            background: #f5f9ff;
+            border: 1px solid #d2e3fc;
+            border-radius: 12px;
+            padding: 8px 12px;
+            }
+            #efectivo-manual input{
+            font-size:22px !important;
+            min-height:52px !important;
+            padding:10px 12px !important;
+            }
+            #efectivo-manual label{
+            font-size:12px !important;
+            letter-spacing:.06em;
+            text-transform:uppercase;
+            color:#6b7280;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            st.markdown('<div id="efectivo-manual">', unsafe_allow_html=True)
+            CONS_efectivo = currency_input(
+                "Efectivo en caja",
+                key="CONS_efectivo_input",
+                value=float(efectivo_ini)
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+
         st.markdown('<div id="efectivo-manual">', unsafe_allow_html=True)
         CONS_efectivo = currency_input(
             "Efectivo en caja",
@@ -4001,6 +4103,23 @@ if show("🧮 Diario Consolidado"):
             value=float(efectivo_ini)
         )
         st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("""
+        <style>
+        button[kind="secondary"] {
+        background: linear-gradient(90deg,#1565c0,#64b5f6) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border: none !important;
+        border-radius: 10px !important;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+        }
+        button[kind="secondary"]:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
         if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True, key="CONS_efectivo_save"):
             # Reemplazo automático: primero borro, luego inserto/actualizo
