@@ -2148,6 +2148,17 @@ def notify_ok(msg: str):
     except Exception:
         pass
 
+def section_header(title: str, color: str = "#1565c0"):
+    st.markdown(f"""
+    <div style='display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;margin-top:-0.5rem;'>
+      <div style='background:{color};color:white;padding:6px 12px;border-radius:8px;
+                  font-weight:700;font-size:15px;box-shadow:0 2px 4px rgba(0,0,0,0.15);'>
+        {title}
+      </div>
+      <div style='height:2px;flex:1;background:linear-gradient(to right,{color},#64b5f6,#fff);'></div>
+    </div>
+    """, unsafe_allow_html=True)
+
 def flash_next_run(msg: str, icon: str = "✅"):
     """Guarda un mensaje para mostrarlo tras el próximo rerun."""
     st.session_state["_flash_msg"] = (msg, icon)
@@ -3886,16 +3897,10 @@ def show(section: str) -> bool:
 # Diario consolidado
 # ---------------------------------------------------------
 
-st.markdown("""
-<div style='display:flex;align-items:center;gap:10px;margin-bottom:0.8rem;margin-top:-0.5rem;'>
-  <div style='background:#1565c0;color:white;padding:6px 12px;border-radius:8px;font-weight:700;font-size:15px;box-shadow:0 2px 4px rgba(0,0,0,0.15);'>
-    🧮 Diario Consolidado
-  </div>
-  <div style='height:2px;flex:1;background:linear-gradient(to right,#1565c0,#64b5f6,#fff);'></div>
-</div>
-""", unsafe_allow_html=True)
+
 
 if show("🧮 Diario Consolidado"):
+    section_header("🧮 Diario Consolidado")
     # Lee dataframes (suponiendo que ya filtran eliminados lógicamente)
     v_df = read_ventas()
     g_df = read_gastos()
@@ -4039,6 +4044,7 @@ if show("🧮 Diario Consolidado"):
 # Ventas
 # ---------------------------------------------------------
 elif show("🧾 Ventas"):
+    section_header("🧾 Ventas")
     # -------- Alta de venta --------
     f1c1, f1c2 = st.columns(2, gap="small")
     VTA_fecha = f1c1.date_input(
@@ -4358,6 +4364,7 @@ elif show("🧾 Ventas"):
 # Gastos
 # ---------------------------------------------------------
 elif show("💸 Gastos"):
+    section_header("🧾 Gastos")
     # -------- Alta de gasto --------
     with st.form(key="GTO_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
@@ -4523,6 +4530,7 @@ elif show("💸 Gastos"):
 # Préstamos
 # ---------------------------------------------------------
 elif show("🤝 Préstamos"):
+    section_header("🧾 Préstamos")
     # ---- Alta con form ----
     with st.form("PRE_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
@@ -4644,6 +4652,7 @@ elif show("🤝 Préstamos"):
 # Inventario
 # ---------------------------------------------------------
 elif show("📦 Inventario"):
+    section_header("🧾 Inventario")
     # ---- Alta con form ----
     with st.form(key="INV_form", clear_on_submit=True):
         c1, c2 = st.columns(2, gap="small")
@@ -4764,6 +4773,7 @@ elif show("📦 Inventario"):
 # Deudores
 # ---------------------------------------------------------
 elif show("👤 Deudores"):
+    section_header("🧾 Deudores")
     st.markdown("### Deudores")
 
     # Trae cartera y total
@@ -4803,6 +4813,7 @@ elif show("👤 Deudores"):
 # Importar/Exportar (Nuevo: todo en uno)
 # ---------------------------------------------------------
 elif show("⬆️ Importar/Exportar"):
+    section_header("🧾 Importar/Exportar")
     st.subheader("Importar desde Excel")
 
     up = st.file_uploader("Selecciona tu archivo .xlsx", type=["xlsx"])
@@ -4872,6 +4883,7 @@ elif show("⬆️ Importar/Exportar"):
                 st.caption(f"Sheet ID/URL: {sid}")
 
 elif show("⚙️ Mi Cuenta"):
+    section_header("🧾 Mi Cuenta")
     st.subheader("Mi Cuenta")
     st.caption(f"Sesión: **{user}** · rol **{role}**")
 
@@ -4972,6 +4984,7 @@ elif show("⚙️ Mi Cuenta"):
 # Administración (solo admin) — Google Sheets en una columna
 # ---------------------------------------------------------
 if is_admin() and show("🛠️ Administración"):
+    section_header("🧾 Administración")
 
     # -------- Google Sheets (una columna) --------
     st.subheader("Google Sheets")
