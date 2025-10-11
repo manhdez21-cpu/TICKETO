@@ -3933,6 +3933,29 @@ if show("🧮 Diario Consolidado"):
     ]
     render_stat_cards(items, hide_empty=True, hide_zero=False)
 
+    # 💅 Resaltar la tarjeta "Total de capital"
+    st.markdown("""
+    <style>
+    div[data-testid="stHorizontalBlock"] > div:first-child div[data-testid="stMetricValue"] {
+        font-size: 2rem !important;
+        color: #0a3069 !important;
+        font-weight: 700 !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div:first-child div[data-testid="stMetricLabel"] {
+        color: #0a3069 !important;
+        font-weight: 700 !important;
+        letter-spacing: .05em;
+    }
+    div[data-testid="stHorizontalBlock"] > div:first-child {
+        background: linear-gradient(135deg, #f0f7ff, #d9eaff);
+        border: 2px solid #0a3069 !important;
+        border-radius: 18px !important;
+        box-shadow: 0 0 6px rgba(10,48,105,0.2);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
     metric_box = st.empty()
     metric_box.metric("EFECTIVO", money(efectivo_ini))
 
