@@ -3934,7 +3934,6 @@ if show("🧮 Diario Consolidado"):
     render_stat_cards(items, hide_empty=True, hide_zero=False)
 
     metric_box = st.empty()
-
     metric_box.metric("EFECTIVO", money(efectivo_ini))
 
     # Layout 2:1 (solo usamos la izquierda; derecha queda vacía)
