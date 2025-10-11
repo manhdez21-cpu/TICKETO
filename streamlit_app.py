@@ -1405,13 +1405,12 @@ def read_deudores_ini() -> pd.DataFrame:
 
 
 CACHE_READERS = {
-    "transacciones": read_ventas,
-    "gastos": read_gastos,
-    "prestamos": read_prestamos,
-    "inventario": read_inventario,
-    # agrega los que ya usas en finish_and_refresh:
-    "deudores_ini": read_deudores_ini,
-    "consolidado_diario": read_consolidado_diario,  # usa aquí el nombre real de tu lector
+    "transacciones": _read_ventas,
+    "gastos": _read_gastos,
+    "prestamos": _read_prestamos,
+    "inventario": _read_inventario,
+    "deudores_ini": _read_deudores_ini,
+    "consolidado_diario": read_consolidado_diario,  # esta sí está cacheada con ese nombre
 }
 
 # ========= Corte y unificación de deudores =========
@@ -2782,13 +2781,14 @@ def finish_and_refresh(
     rerun: bool = True
 ):
     """
-    Invalida SOLO las caches de las tablas indicadas y opcionalmente sincroniza a GSheet.
+    Invalida SOLO las cachés de las tablas indicadas y opcionalmente sincroniza a GSheet.
     Luego muestra un flash y (opcional) hace rerun.
     """
     try:
-        # 1) invalidación selectiva de caché
+        # 1) Invalidación selectiva de caché
         if tables_to_sync:
             for name in tables_to_sync:
+                # a) limpiar lo que venga del mapa principal
                 f = CACHE_READERS.get(name)
                 if f:
                     try:
@@ -2796,17 +2796,34 @@ def finish_and_refresh(
                     except Exception:
                         pass
 
-            # 2) sincronización solo de esas tablas (si aplica en tu app)
+                # b) intentar limpiar explícitamente el alias "interno" cacheado
+                _internal_alias = {
+                    "transacciones": _read_ventas,
+                    "gastos": _read_gastos,
+                    "prestamos": _read_prestamos,
+                    "inventario": _read_inventario,
+                    "deudores_ini": _read_deudores_ini,
+                    "consolidado_diario": _read_consolidado,
+                }.get(name)
+
+                if _internal_alias and (_internal_alias is not f):
+                    try:
+                        _internal_alias.clear()
+                    except Exception:
+                        pass
+
+            # 2) Sincronización (si tu app la usa)
             try:
-                sync_tables_to_gsheet(tables_to_sync)
+                if tables_to_sync:
+                    sync_tables_to_gsheet(tables_to_sync)
             except Exception:
                 pass
 
-        # 3) mensaje para el próximo run
+        # 3) Mensaje para el próximo run
         if msg:
             flash_next_run(msg)
 
-        # 4) backup/auditoría de usuario (igual que antes)
+        # 4) Backup/auditoría por usuario (si aplica)
         u = st.session_state.get("auth_user")
         if u:
             try:
@@ -2815,8 +2832,7 @@ def finish_and_refresh(
                 pass
 
     finally:
-        # ❌ NO limpies toda la cache global aquí
-        # ✅ Sólo rerun si lo pides
+        # 5) Rerun opcional
         if rerun:
             st.rerun()
 
