@@ -3939,163 +3939,84 @@ if show("🧮 Diario Consolidado"):
 
     # === Tarjetas alineadas (no ocultar ceros) ===
     items = [
-        {"title": "Total de capital",  "value": total_capital,   "fmt": money},  # ← PRIMERO
-        {"title": "Total ventas",      "value": total_ventas,    "fmt": money},
-        {"title": "Gastos totales",    "value": total_gastos,    "fmt": money},
-        {"title": "Costos totales",    "value": total_costos,    "fmt": money},
-        {"title": "Ganancia total",    "value": total_ganancia,  "fmt": money},
-        {"title": "Total préstamos",   "value": total_prestamos, "fmt": money},
-        {"title": "Inventario total",  "value": total_inventario,"fmt": money},
-        {"title": "Deudores totales",  "value": total_deu,       "fmt": money},
+    {"title": "Total de capital",  "value": total_capital,   "fmt": money},
+    {"title": "Total ventas",      "value": total_ventas,    "fmt": money},
+    {"title": "Gastos totales",    "value": total_gastos,    "fmt": money},
+    {"title": "Costos totales",    "value": total_costos,    "fmt": money},
+    {"title": "Ganancia total",    "value": total_ganancia,  "fmt": money},
+    {"title": "Total préstamos",   "value": total_prestamos, "fmt": money},
+    {"title": "Inventario total",  "value": total_inventario,"fmt": money},
+    {"title": "Deudores totales",  "value": total_deu,       "fmt": money},
     ]
     render_stat_cards(items, hide_empty=True, hide_zero=False)
 
+    # === ESTILOS DE TARJETAS (una sola vez, no dupliques) ===
     st.markdown("""
     <style>
-
-    /* === GRID GENERAL === */
-    .stat-grid{
-    display:grid;
-    gap:12px;
-    }
+    .stat-grid{ display:grid; gap:12px; }
     .stat-card{
-    background:#ffffff;
-    border:1px solid #e5e7eb;
-    border-radius:16px;
-    padding:16px 20px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.04);
+    background:#ffffff; border:1px solid #e5e7eb; border-radius:16px;
+    padding:16px 20px; box-shadow:0 2px 6px rgba(0,0,0,0.04);
     transition:all 0.2s ease;
     }
-    .stat-card:hover{
-    transform:scale(1.01);
-    box-shadow:0 4px 10px rgba(0,0,0,0.08);
-    }
-    .stat-title{
-    font-size:0.8rem;
-    text-transform:uppercase;
-    letter-spacing:.05em;
-    color:#6b7280;
-    }
-    .stat-value{
-    font-size:1.25rem;
-    font-weight:600;
-    color:#111827;
-    }
+    .stat-card:hover{ transform:scale(1.01); box-shadow:0 4px 10px rgba(0,0,0,0.08); }
+    .stat-title{ font-size:0.8rem; text-transform:uppercase; letter-spacing:.05em; color:#6b7280; }
+    .stat-value{ font-size:1.25rem; font-weight:600; color:#111827; }
 
-    /* === DESTACADO (Total de capital) === */
+    /* Destacado: primera tarjeta (Total de capital) */
     .stat-card.stat-featured{
     background:linear-gradient(135deg,#e3f2fd,#bbdefb);
-    border:2px solid #1565c0 !important;
-    box-shadow:0 0 10px rgba(21,101,192,0.25);
+    border:2px solid #1565c0 !important; box-shadow:0 0 10px rgba(21,101,192,0.25);
     transform:scale(1.02);
     }
-    .stat-card.stat-featured .stat-title{
-    color:#0a3069 !important;
-    font-weight:700 !important;
-    }
-    .stat-card.stat-featured .stat-value{
-    color:#0a3069 !important;
-    font-weight:800 !important;
-    font-size:2rem !important;
-    }
+    .stat-card.stat-featured .stat-title{ color:#0a3069 !important; font-weight:700 !important; }
+    .stat-card.stat-featured .stat-value{ color:#0a3069 !important; font-weight:800 !important; font-size:2rem !important; }
 
-    /* === RESPONSIVIDAD === */
+    /* Responsivo */
     @media (max-width:900px){
-    .stat-grid{grid-template-columns:1fr !important;}
-    .stat-card{padding:10px 12px !important;}
-    .stat-card.stat-featured .stat-value{font-size:1.6rem !important;}
+    .stat-grid{ grid-template-columns:1fr !important; }
+    .stat-card{ padding:10px 12px !important; }
+    .stat-card.stat-featured .stat-value{ font-size:1.6rem !important; }
     }
 
-    /* === ANIMACIÓN LIGERA === */
-    .stat-card{opacity:0;animation:fadeIn 0.8s ease forwards;}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+    /* Animación sutil */
+    .stat-card{ opacity:0; animation:fadeIn 0.8s ease forwards; }
+    @keyframes fadeIn{ from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:translateY(0);} }
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <style>
-    /* Estilo base de tus tarjetas (no lo toco si ya lo tienes) */
-    /* .stat-grid { display:grid; gap:12px; } */
-    /* .stat-card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:14px 16px; } */
-    /* .stat-title { font-size:.75rem; letter-spacing:.06em; text-transform:uppercase; color:#6b7280; } */
-    /* .stat-value { font-size:1.25rem; font-weight:600; color:#111827; } */
-
-    /* ⭐ Destacado SOLO para la primera tarjeta ("Total de capital") */
-    .stat-card.stat-featured{
-    background: linear-gradient(135deg, #f0f7ff, #d9eaff);
-    border: 2px solid #0a3069 !important;
-    border-radius: 18px !important;
-    box-shadow: 0 0 10px rgba(10,48,105,0.18);
-    }
-    .stat-card.stat-featured .stat-title{
-    color:#0a3069 !important;
-    font-weight:700 !important;
-    }
-    .stat-card.stat-featured .stat-value{
-    color:#0a3069 !important;
-    font-weight:800 !important;
-    font-size:2rem !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
+    # EFECTIVO al final
     metric_box = st.empty()
     metric_box.metric("EFECTIVO", money(efectivo_ini))
 
-    # Layout 2:1 (solo usamos la izquierda; derecha queda vacía)
+    # Layout 2:1
     colL, _ = st.columns([2, 1], gap="small")
-
-
-
     with colL:
+        # === Estilos del contenedor + input de efectivo (PASO 5) ===
         st.markdown("""
         <style>
+        #efectivo-manual{
+        background:#f5f9ff; border:1px solid #d2e3fc; border-radius:12px; padding:8px 12px;
+        }
         #efectivo-manual input{
-        font-size:22px !important;
-        min-height:52px !important;
-        padding:10px 12px !important;
+        font-size:22px !important; min-height:52px !important; padding:10px 12px !important;
         }
         #efectivo-manual label{
-        font-size:12px !important;
-        letter-spacing:.06em;
-        text-transform:uppercase;
-        color:#6b7280;
+        font-size:12px !important; letter-spacing:.06em; text-transform:uppercase; color:#6b7280;
+        }
+        /* Botón Guardar (PASO 6) */
+        button[kind="secondary"]{
+        background:linear-gradient(90deg,#1565c0,#64b5f6) !important; color:white !important;
+        font-weight:600 !important; border:none !important; border-radius:10px !important;
+        box-shadow:0 3px 6px rgba(0,0,0,0.15);
+        }
+        button[kind="secondary"]:hover{
+        transform:scale(1.02); box-shadow:0 4px 10px rgba(0,0,0,0.25);
         }
         </style>
         """, unsafe_allow_html=True)
 
-        with colL:
-            # === PASO 5: estilos del contenedor + input de efectivo ===
-            st.markdown("""
-            <style>
-            #efectivo-manual {
-            background: #f5f9ff;
-            border: 1px solid #d2e3fc;
-            border-radius: 12px;
-            padding: 8px 12px;
-            }
-            #efectivo-manual input{
-            font-size:22px !important;
-            min-height:52px !important;
-            padding:10px 12px !important;
-            }
-            #efectivo-manual label{
-            font-size:12px !important;
-            letter-spacing:.06em;
-            text-transform:uppercase;
-            color:#6b7280;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-
-            st.markdown('<div id="efectivo-manual">', unsafe_allow_html=True)
-            CONS_efectivo = currency_input(
-                "Efectivo en caja",
-                key="CONS_efectivo_input",
-                value=float(efectivo_ini)
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-
+        # === Input grande de efectivo (una sola vez) ===
         st.markdown('<div id="efectivo-manual">', unsafe_allow_html=True)
         CONS_efectivo = currency_input(
             "Efectivo en caja",
@@ -4104,35 +4025,13 @@ if show("🧮 Diario Consolidado"):
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown("""
-        <style>
-        button[kind="secondary"] {
-        background: linear-gradient(90deg,#1565c0,#64b5f6) !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border: none !important;
-        border-radius: 10px !important;
-        box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-        }
-        button[kind="secondary"]:hover {
-        transform: scale(1.02);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.25);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
+        # Botón guardar
         if st.button("💾 Guardar / Reemplazar (global)", use_container_width=True, key="CONS_efectivo_save"):
-            # Reemplazo automático: primero borro, luego inserto/actualizo
             delete_consolidado("GLOBAL")
             upsert_consolidado("GLOBAL", float(CONS_efectivo), "")
-
-            # Refresca la métrica de efectivo
             nuevo_ef, _ = get_efectivo_global_now()
             metric_box.metric("EFECTIVO", money(nuevo_ef))
-            components.html(
-                "<script>try{document.activeElement && document.activeElement.blur();}catch(e){}</script>",
-                height=0, width=0
-            )
+            components.html("<script>try{document.activeElement&&document.activeElement.blur();}catch(e){}</script>", height=0, width=0)
             finish_and_refresh("Efectivo (GLOBAL) reemplazado.", ["consolidado_diario"])
     
 
